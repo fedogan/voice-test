@@ -68,32 +68,38 @@
             </label>
             <div class="sliderRow">
               <label class="label" for="highPassFreq" data-i18n="highPassLabel">High-pass (Hz)</label>
-              <span id="highPassValue" class="mutedText">120 Hz</span>
+              <span id="highPassValue" class="mutedText">90 Hz</span>
             </div>
-            <input id="highPassFreq" type="range" min="60" max="200" step="1" value="120" />
+            <input id="highPassFreq" type="range" min="60" max="200" step="1" value="90" />
 
             <label class="toggle">
-              <input id="compressorToggle" type="checkbox" checked />
+              <input id="compressorToggle" type="checkbox" />
               <span data-i18n="compressorToggle">Compressor</span>
             </label>
 
             <div class="sliderRow">
               <label class="label" for="gateThreshold" data-i18n="gateThresholdLabel">Gate Threshold (dB)</label>
-              <span id="gateThresholdValue" class="mutedText">-45 dB</span>
+              <span id="gateThresholdValue" class="mutedText">-40 dB</span>
             </div>
-            <input id="gateThreshold" type="range" min="-60" max="-20" step="1" value="-45" />
+            <input id="gateThreshold" type="range" min="-60" max="-20" step="1" value="-40" />
 
             <div class="sliderRow">
               <label class="label" for="gateAttack" data-i18n="gateAttackLabel">Gate Attack (ms)</label>
-              <span id="gateAttackValue" class="mutedText">10 ms</span>
+              <span id="gateAttackValue" class="mutedText">5 ms</span>
             </div>
-            <input id="gateAttack" type="range" min="1" max="50" step="1" value="10" />
+            <input id="gateAttack" type="range" min="1" max="50" step="1" value="5" />
 
             <div class="sliderRow">
               <label class="label" for="gateRelease" data-i18n="gateReleaseLabel">Gate Release (ms)</label>
               <span id="gateReleaseValue" class="mutedText">150 ms</span>
             </div>
             <input id="gateRelease" type="range" min="20" max="400" step="1" value="150" />
+
+            <div class="sliderRow">
+              <label class="label" for="gateFloor" data-i18n="gateFloorLabel">Gate Floor (dB)</label>
+              <span id="gateFloorValue" class="mutedText">-60 dB</span>
+            </div>
+            <input id="gateFloor" type="range" min="-80" max="-30" step="1" value="-60" />
           </div>
 
           <div class="row buttons">
@@ -146,6 +152,9 @@
           <div class="cardTitle secondary" data-i18n="screenShareTitle">Ekran Paylaşımı</div>
           <div class="screenContainer">
             <video id="screenVideo" autoplay playsinline muted></video>
+            <button id="screenFullscreenBtn" class="btn small" data-i18n="fullscreenEnter">
+              Tam Ekran
+            </button>
             <div id="screenStatus" class="mutedText" data-i18n="screenShareEmpty">
               Ekran paylaşımı yok.
             </div>
