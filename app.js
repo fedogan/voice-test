@@ -37,7 +37,16 @@ const t = {
   screenShareStopped: 'Ekran paylaşımı durduruldu.',
   screenShareUnsupported: 'Bu cihazda ekran paylaşımı desteklenmiyor.',
   screenShareError: 'Ekran paylaşımı başlatılamadı.',
-  screenShareEnded: 'Ekran paylaşımı bitti.'
+  screenShareEnded: 'Ekran paylaşımı bitti.',
+  advancedAudioToggle: 'Gelişmiş Gürültü Azaltma',
+  highPassLabel: 'High-pass (Hz)',
+  compressorToggle: 'Compressor',
+  gateThresholdLabel: 'Gate Threshold (dB)',
+  gateAttackLabel: 'Gate Attack (ms)',
+  gateReleaseLabel: 'Gate Release (ms)',
+  advancedAudioOn: 'Gelişmiş gürültü azaltma açıldı.',
+  advancedAudioOff: 'Gelişmiş gürültü azaltma kapatıldı.',
+  advancedAudioError: 'Gelişmiş gürültü azaltma başlatılamadı. Normal mikrofon kullanılıyor.'
 };
 
 function setText() {
@@ -73,7 +82,17 @@ const els = {
   audioList: document.getElementById('audioList'),
   screenShareBtn: document.getElementById('screenShareBtn'),
   screenVideo: document.getElementById('screenVideo'),
-  screenStatus: document.getElementById('screenStatus')
+  screenStatus: document.getElementById('screenStatus'),
+  advancedAudioToggle: document.getElementById('advancedAudioToggle'),
+  highPassFreq: document.getElementById('highPassFreq'),
+  highPassValue: document.getElementById('highPassValue'),
+  compressorToggle: document.getElementById('compressorToggle'),
+  gateThreshold: document.getElementById('gateThreshold'),
+  gateThresholdValue: document.getElementById('gateThresholdValue'),
+  gateAttack: document.getElementById('gateAttack'),
+  gateAttackValue: document.getElementById('gateAttackValue'),
+  gateRelease: document.getElementById('gateRelease'),
+  gateReleaseValue: document.getElementById('gateReleaseValue')
 };
 
 function getQueryServerUrl() {
@@ -105,6 +124,27 @@ let screenTrack = null;
 let isScreenSharing = false;
 let activeScreenPeerId = null;
 let currentMicTrack = null;
+let rawMicStream = null;
+let rawMicTrack = null;
+let audioCtx = null;
+let audioWorkletLoaded = false;
+let audioSourceNode = null;
+let highPassNode = null;
+let compressorNode = null;
+let gateNode = null;
+let destinationNode = null;
+let processedStream = null;
+let processedTrack = null;
+
+const AUDIO_SETTINGS_KEY = 'voice-advanced-audio';
+const audioSettings = {
+  gateThreshold: -45,
+  gateAttack: 10,
+  gateRelease: 150,
+  highPass: 120,
+  compressor: true,
+  advanced: true
+};
 
 const peers = new Map(); // peerId -> { pc, audioEl, pendingCandidates: [] }
 const participants = new Map(); // id -> nickname
@@ -137,6 +177,143 @@ function log(message) {
   if (els.log) {
     els.log.textContent = logLines.join('\n');
     els.log.scrollTop = els.log.scrollHeight;
+  }
+}
+
+function loadAudioSettings() {
+  const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.gateThreshold === 'number') audioSettings.gateThreshold = parsed.gateThreshold;
+    if (typeof parsed.gateAttack === 'number') audioSettings.gateAttack = parsed.gateAttack;
+    if (typeof parsed.gateRelease === 'number') audioSettings.gateRelease = parsed.gateRelease;
+    if (typeof parsed.highPass === 'number') audioSettings.highPass = parsed.highPass;
+    if (typeof parsed.compressor === 'boolean') audioSettings.compressor = parsed.compressor;
+    if (typeof parsed.advanced === 'boolean') audioSettings.advanced = parsed.advanced;
+  } catch (_) {
+    // ignore settings parse errors
+  }
+}
+
+function saveAudioSettings() {
+  localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(audioSettings));
+}
+
+function updateAudioSettingsUI() {
+  if (els.highPassFreq) els.highPassFreq.value = String(audioSettings.highPass);
+  if (els.highPassValue) els.highPassValue.textContent = `${audioSettings.highPass} Hz`;
+  if (els.gateThreshold) els.gateThreshold.value = String(audioSettings.gateThreshold);
+  if (els.gateThresholdValue) els.gateThresholdValue.textContent = `${audioSettings.gateThreshold} dB`;
+  if (els.gateAttack) els.gateAttack.value = String(audioSettings.gateAttack);
+  if (els.gateAttackValue) els.gateAttackValue.textContent = `${audioSettings.gateAttack} ms`;
+  if (els.gateRelease) els.gateRelease.value = String(audioSettings.gateRelease);
+  if (els.gateReleaseValue) els.gateReleaseValue.textContent = `${audioSettings.gateRelease} ms`;
+  if (els.compressorToggle) els.compressorToggle.checked = audioSettings.compressor;
+  if (els.advancedAudioToggle) els.advancedAudioToggle.checked = audioSettings.advanced;
+}
+
+async function ensureAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new AudioContext();
+  }
+  if (audioCtx.state === 'suspended') {
+    await audioCtx.resume();
+  }
+}
+
+async function ensureAudioWorklet() {
+  if (!audioCtx || audioWorkletLoaded) return;
+  await audioCtx.audioWorklet.addModule('noise-gate-worklet.js');
+  audioWorkletLoaded = true;
+}
+
+function updateGateParams() {
+  if (!gateNode || !audioCtx) return;
+  gateNode.parameters.get('threshold').setValueAtTime(audioSettings.gateThreshold, audioCtx.currentTime);
+  gateNode.parameters.get('attack').setValueAtTime(audioSettings.gateAttack, audioCtx.currentTime);
+  gateNode.parameters.get('release').setValueAtTime(audioSettings.gateRelease, audioCtx.currentTime);
+}
+
+function updateCompressorParams() {
+  if (!compressorNode) return;
+  compressorNode.threshold.value = -24;
+  compressorNode.ratio.value = 4;
+  compressorNode.attack.value = 0.003;
+  compressorNode.release.value = 0.25;
+}
+
+function rebuildAudioPipeline() {
+  if (!audioCtx || !rawMicStream) return;
+  if (audioSourceNode) {
+    try { audioSourceNode.disconnect(); } catch (_) {}
+  }
+  if (highPassNode) {
+    try { highPassNode.disconnect(); } catch (_) {}
+  }
+  if (compressorNode) {
+    try { compressorNode.disconnect(); } catch (_) {}
+  }
+  if (gateNode) {
+    try { gateNode.disconnect(); } catch (_) {}
+  }
+  if (destinationNode) {
+    try { destinationNode.disconnect(); } catch (_) {}
+  }
+
+  audioSourceNode = audioCtx.createMediaStreamSource(rawMicStream);
+  highPassNode = audioCtx.createBiquadFilter();
+  highPassNode.type = 'highpass';
+  highPassNode.frequency.value = audioSettings.highPass;
+
+  compressorNode = audioCtx.createDynamicsCompressor();
+  updateCompressorParams();
+
+  gateNode = new AudioWorkletNode(audioCtx, 'noise-gate', {
+    parameterData: {
+      threshold: audioSettings.gateThreshold,
+      attack: audioSettings.gateAttack,
+      release: audioSettings.gateRelease,
+      floor: -40
+    }
+  });
+
+  destinationNode = audioCtx.createMediaStreamDestination();
+
+  audioSourceNode.connect(highPassNode);
+  if (audioSettings.compressor) {
+    highPassNode.connect(compressorNode);
+    compressorNode.connect(gateNode);
+  } else {
+    highPassNode.connect(gateNode);
+  }
+  gateNode.connect(destinationNode);
+
+  processedStream = destinationNode.stream;
+  processedTrack = processedStream.getAudioTracks()[0] || null;
+  updateGateParams();
+}
+
+async function updateProcessedTrack() {
+  if (!audioSettings.advanced) {
+    currentMicTrack = rawMicTrack;
+    applyMuteToTrack(currentMicTrack);
+    setupMicForAllPeers();
+    return;
+  }
+  try {
+    await ensureAudioContext();
+    await ensureAudioWorklet();
+    rebuildAudioPipeline();
+    currentMicTrack = processedTrack || rawMicTrack;
+    applyMuteToTrack(currentMicTrack);
+    setupMicForAllPeers();
+  } catch (err) {
+    currentMicTrack = rawMicTrack;
+    applyMuteToTrack(currentMicTrack);
+    setupMicForAllPeers();
+    setStatus(t.advancedAudioError);
+    log(`Gelişmiş gürültü azaltma hatası: ${err.message || err}`);
   }
 }
 
@@ -258,14 +435,14 @@ async function ensureLocalStream({ forceNew = false } = {}) {
   if (localStream && !forceNew) return localStream;
   try {
     const newStream = await navigator.mediaDevices.getUserMedia(getAudioConstraints());
+    rawMicStream = newStream;
     const [micTrack] = newStream.getAudioTracks();
-    currentMicTrack = micTrack || null;
-    applyMuteToTrack(currentMicTrack);
+    rawMicTrack = micTrack || null;
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
     }
     localStream = newStream;
-    setupMicForAllPeers();
+    await updateProcessedTrack();
     return localStream;
   } catch (err) {
     if (err && err.name === 'NotAllowedError') {
@@ -853,6 +1030,7 @@ async function startJoinFlow(roomId) {
     updateNickname(els.nicknameInput.value);
   }
 
+  await ensureAudioContext();
   const stream = await ensureLocalStream();
   if (!stream) return;
 
@@ -878,6 +1056,10 @@ function leaveRoom() {
     localStream.getTracks().forEach((track) => track.stop());
     localStream = null;
   }
+  rawMicStream = null;
+  rawMicTrack = null;
+  processedStream = null;
+  processedTrack = null;
   currentMicTrack = null;
 
   if (socket) {
@@ -963,6 +1145,63 @@ if (els.noiseToggle) {
   });
 }
 
+  if (els.advancedAudioToggle) {
+    els.advancedAudioToggle.addEventListener('change', async (event) => {
+      audioSettings.advanced = Boolean(event.target.checked);
+      saveAudioSettings();
+      updateAudioSettingsUI();
+      if (currentRoomId) {
+        await updateProcessedTrack();
+        setStatus(audioSettings.advanced ? t.advancedAudioOn : t.advancedAudioOff);
+      }
+    });
+  }
+
+  if (els.highPassFreq) {
+    els.highPassFreq.addEventListener('input', async (event) => {
+      audioSettings.highPass = Number(event.target.value);
+      saveAudioSettings();
+      updateAudioSettingsUI();
+      if (currentRoomId) await updateProcessedTrack();
+    });
+  }
+
+  if (els.compressorToggle) {
+    els.compressorToggle.addEventListener('change', async (event) => {
+      audioSettings.compressor = Boolean(event.target.checked);
+      saveAudioSettings();
+      updateAudioSettingsUI();
+      if (currentRoomId) await updateProcessedTrack();
+    });
+  }
+
+  if (els.gateThreshold) {
+    els.gateThreshold.addEventListener('input', async (event) => {
+      audioSettings.gateThreshold = Number(event.target.value);
+      saveAudioSettings();
+      updateAudioSettingsUI();
+      if (currentRoomId) await updateProcessedTrack();
+    });
+  }
+
+  if (els.gateAttack) {
+    els.gateAttack.addEventListener('input', async (event) => {
+      audioSettings.gateAttack = Number(event.target.value);
+      saveAudioSettings();
+      updateAudioSettingsUI();
+      if (currentRoomId) await updateProcessedTrack();
+    });
+  }
+
+  if (els.gateRelease) {
+    els.gateRelease.addEventListener('input', async (event) => {
+      audioSettings.gateRelease = Number(event.target.value);
+      saveAudioSettings();
+      updateAudioSettingsUI();
+      if (currentRoomId) await updateProcessedTrack();
+    });
+  }
+
 if (els.speakerBtn) {
   els.speakerBtn.addEventListener('click', () => {
     isSpeakerMuted = !isSpeakerMuted;
@@ -1002,6 +1241,8 @@ if (els.chatInput) {
 }
 
 setText();
+loadAudioSettings();
+updateAudioSettingsUI();
 setUiState({ inRoom: false });
 setStatus('Hazır. Oda ID girip katılabilirsin.');
 log('Hazır.');

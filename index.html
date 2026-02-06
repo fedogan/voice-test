@@ -61,6 +61,41 @@
             </label>
           </div>
 
+          <div class="row audioSettings">
+            <label class="toggle">
+              <input id="advancedAudioToggle" type="checkbox" checked />
+              <span data-i18n="advancedAudioToggle">Gelişmiş Gürültü Azaltma</span>
+            </label>
+            <div class="sliderRow">
+              <label class="label" for="highPassFreq" data-i18n="highPassLabel">High-pass (Hz)</label>
+              <span id="highPassValue" class="mutedText">120 Hz</span>
+            </div>
+            <input id="highPassFreq" type="range" min="60" max="200" step="1" value="120" />
+
+            <label class="toggle">
+              <input id="compressorToggle" type="checkbox" checked />
+              <span data-i18n="compressorToggle">Compressor</span>
+            </label>
+
+            <div class="sliderRow">
+              <label class="label" for="gateThreshold" data-i18n="gateThresholdLabel">Gate Threshold (dB)</label>
+              <span id="gateThresholdValue" class="mutedText">-45 dB</span>
+            </div>
+            <input id="gateThreshold" type="range" min="-60" max="-20" step="1" value="-45" />
+
+            <div class="sliderRow">
+              <label class="label" for="gateAttack" data-i18n="gateAttackLabel">Gate Attack (ms)</label>
+              <span id="gateAttackValue" class="mutedText">10 ms</span>
+            </div>
+            <input id="gateAttack" type="range" min="1" max="50" step="1" value="10" />
+
+            <div class="sliderRow">
+              <label class="label" for="gateRelease" data-i18n="gateReleaseLabel">Gate Release (ms)</label>
+              <span id="gateReleaseValue" class="mutedText">150 ms</span>
+            </div>
+            <input id="gateRelease" type="range" min="20" max="400" step="1" value="150" />
+          </div>
+
           <div class="row buttons">
             <button id="joinBtn" class="btn primary" data-i18n="joinBtn">Katıl</button>
             <button id="createBtn" class="btn" data-i18n="createBtn">Oda oluştur</button>
