@@ -178,6 +178,11 @@ body {
   color: var(--text);
 }
 
+#versiona {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .mutedText {
   color: var(--muted);
   font-size: 13px;

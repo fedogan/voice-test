@@ -317,6 +317,7 @@ function logPeerSenders(peerId, pc) {
 async function renegotiatePeer(peerId, reason) {
   const info = peers.get(peerId);
   if (!info || !socket) return;
+  if (!info.isNegotiationReady) return;
   const { pc } = info;
   if (info.isMakingOffer || pc.signalingState !== 'stable') return;
   info.isMakingOffer = true;
@@ -715,10 +716,12 @@ function ensureSocket() {
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('signal', { to: from, from: socket.id, data: pc.localDescription });
+        info.isNegotiationReady = true;
         log(`Yanıt gönderildi: ${from}`);
       } else if (data.type === 'answer') {
         log(`Yanıt alındı: ${from}`);
         await pc.setRemoteDescription(data);
+        info.isNegotiationReady = true;
         if (info.pendingCandidates.length > 0) {
           for (const candidate of info.pendingCandidates) {
             await pc.addIceCandidate(candidate);
@@ -750,6 +753,7 @@ function createPeerConnection(peerId, shouldCreateOffer) {
     audioEl: createAudioElement(peerId),
     pendingCandidates: [],
     isMakingOffer: false,
+    isNegotiationReady: false,
     audioTransceiver: null,
     videoTransceiver: null
   };
@@ -809,6 +813,7 @@ function createPeerConnection(peerId, shouldCreateOffer) {
   };
 
   pc.onnegotiationneeded = () => {
+    if (!info.isNegotiationReady) return;
     renegotiatePeer(peerId, 'negotiationneeded');
   };
 
@@ -818,6 +823,7 @@ function createPeerConnection(peerId, shouldCreateOffer) {
   logPeerSenders(peerId, pc);
 
   if (shouldCreateOffer) {
+    info.isMakingOffer = true;
     pc.createOffer()
       .then((offer) => pc.setLocalDescription(offer))
       .then(() => {
@@ -828,6 +834,9 @@ function createPeerConnection(peerId, shouldCreateOffer) {
       .catch((err) => {
         setStatus([`Teklif hatası: ${err.message || err}`, `Peer: ${peerId}`]);
         log(`Teklif hatası ${peerId}: ${err.message || err}`);
+      })
+      .finally(() => {
+        info.isMakingOffer = false;
       });
   }
 
