@@ -5,7 +5,7 @@ Bu repo **yalnızca signaling altyapısını** sağlar; gerçek WebRTC ses akı�
 
 ### Klasör yapısı
 
-- `client/`: Statik frontend (HTML/CSS/JS)
+- `/`: Statik frontend (`index.html`, `app.js`, `styles.css`)
 - `server/`: Express + Socket.io server
 
 ### Gereksinimler
@@ -28,7 +28,7 @@ Health kontrolü:
 
 Client'ı aç:
 
-- `client/index.html` dosyasını bir static server ile servis et (ör. VSCode Live Server).
+- `index.html` dosyasını bir static server ile servis et (ör. VSCode Live Server).
 
 Varsayılan signaling URL (local): `http://localhost:3001`
 
@@ -36,11 +36,11 @@ Eğer server farklı bir adreste çalışıyorsa, client tarafında iki yol var:
 
 - UI'daki **Signaling Server URL** alanına adresi yaz.
 - Veya URL'e `?server=` parametresi ekle:
-  - Örn: `client/index.html?server=http://localhost:3001`
+  - Örn: `index.html?server=http://localhost:3001`
 
 ### GitHub Pages ayarı
 
-GitHub Pages'te `client/` klasörü yayınlanırken `index.html` açıldığında:
+GitHub Pages'te repo kökü yayınlanırken `index.html` açıldığında:
 
 1. Sayfada **Signaling Server URL** alanına kendi signaling server adresini yaz.
 2. Alternatif olarak, sayfa URL'ine `?server=` ekleyebilirsin:
@@ -51,10 +51,17 @@ GitHub Pages'te `client/` klasörü yayınlanırken `index.html` açıldığınd
 - Server'ı bir hostinge koy, çıkan URL'yi client'ta **Signaling Server URL** alanına gir.
 - Koyeb/Render gibi platformlarda `PORT` env'si platform tarafından verilebilir.
 
+### Kullanım
+
+- Oda listesi solda görünür; tıklayınca oda ID otomatik dolar ve katılınır.
+- Takma ad alanını doldurup **Katıl** ile odaya gir.
+- Sohbet panelinde mesaj yaz; `/me` aksiyon, `/nick yeniad` takma ad değiştirir.
+- **Gürültü azaltma** açıkken tarayıcı echo/noise suppression kullanır.
+- **Sesi Kapat/Aç** tüm uzaktan gelen sesleri kapatır.
+- Her katılımcı için ayrı ses seviyesi ve sessize alma kontrolü vardır.
+
 ### Notlar
 
-- Room'a katılınca diğer kullanıcılar için `peer-joined` / `peer-left` event'leri yayınlanır.
-- WebRTC eklemek istersen:
-  - SDP offer/answer ve ICE candidate'ları `signal` üzerinden iletip,
-  - client tarafında `RTCPeerConnection` ile ses akışını kurabilirsin.
+- Oda listesi ve katılımcılar gerçek zamanlı güncellenir.
+- Bağlantı koparsa yeniden bağlanınca otomatik katılmayı dener.
 

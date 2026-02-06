@@ -10,51 +10,103 @@
     <main class="app">
       <header class="header">
         <h1>mini-voice</h1>
-        <p class="subtitle">Minimal signaling demo (room + join/leave + mute state)</p>
+        <p class="subtitle" data-i18n="subtitle">Minimal signaling demo</p>
       </header>
 
-      <section class="card">
-        <div class="row">
-          <label for="roomId" class="label">Room ID</label>
-          <input id="roomId" class="input" placeholder="örn: abc123" autocomplete="off" />
-        </div>
+      <div class="layout">
+        <section class="card column">
+          <div class="cardTitle" data-i18n="roomsTitle">Odalar</div>
+          <div class="roomsList" id="roomsList"></div>
+          <button id="refreshRoomsBtn" class="btn small" data-i18n="refreshRooms">Yenile</button>
+        </section>
 
-        <div class="row">
-          <label for="serverUrlInput" class="label">Signaling Server URL</label>
-          <input
-            id="serverUrlInput"
-            class="input"
-            placeholder="örn: https://your-signal-server.com"
-            autocomplete="off"
-          />
-        </div>
+        <section class="card column">
+          <div class="row">
+            <label for="roomId" class="label" data-i18n="roomIdLabel">Oda ID</label>
+            <input
+              id="roomId"
+              class="input"
+              placeholder="örn: abc123"
+              data-i18n-placeholder="roomIdPlaceholder"
+              autocomplete="off"
+            />
+          </div>
 
-        <div class="row buttons">
-          <button id="joinBtn" class="btn primary">Join</button>
-          <button id="createBtn" class="btn">Create</button>
-          <button id="muteBtn" class="btn" disabled>Mute</button>
-          <button id="leaveBtn" class="btn danger" disabled>Leave</button>
-        </div>
+          <div class="row">
+            <label for="nicknameInput" class="label" data-i18n="nicknameLabel">Takma ad</label>
+            <input
+              id="nicknameInput"
+              class="input"
+              placeholder="örn: Kullanıcı1234"
+              data-i18n-placeholder="nicknamePlaceholder"
+              autocomplete="off"
+            />
+          </div>
 
-        <div class="status">
-          <div class="statusTitle">Durum</div>
-          <pre id="statusText" class="statusText">Hazır.</pre>
-        </div>
+          <div class="row">
+            <label for="serverUrlInput" class="label" data-i18n="serverUrlLabel">Signaling Server URL</label>
+            <input
+              id="serverUrlInput"
+              class="input"
+              placeholder="örn: https://your-signal-server.com"
+              data-i18n-placeholder="serverUrlPlaceholder"
+              autocomplete="off"
+            />
+          </div>
 
-        <div class="status">
-          <div class="statusTitle">Odada kullanıcılar</div>
-          <ul id="usersList" class="users"></ul>
-        </div>
+          <div class="row toggles">
+            <label class="toggle">
+              <input id="noiseToggle" type="checkbox" checked />
+              <span data-i18n="noiseToggle">Gürültü azaltma</span>
+            </label>
+          </div>
 
-        <div class="status logPanel">
-          <div class="statusTitle">Log</div>
-          <pre id="log" class="logText"></pre>
-        </div>
-      </section>
+          <div class="row buttons">
+            <button id="joinBtn" class="btn primary" data-i18n="joinBtn">Katıl</button>
+            <button id="createBtn" class="btn" data-i18n="createBtn">Oda oluştur</button>
+            <button id="muteBtn" class="btn" disabled data-i18n="muteBtn">Mikrofon Sessiz</button>
+            <button id="leaveBtn" class="btn danger" disabled data-i18n="leaveBtn">Çık</button>
+          </div>
+
+          <div class="status">
+            <div class="statusTitle" data-i18n="statusTitle">Durum</div>
+            <pre id="statusText" class="statusText">Hazır.</pre>
+          </div>
+
+          <div class="status">
+            <div class="statusTitle" data-i18n="participantsTitle">Katılımcılar</div>
+            <ul id="usersList" class="users"></ul>
+          </div>
+
+          <div class="status logPanel">
+            <div class="statusTitle" data-i18n="logTitle">Log</div>
+            <pre id="log" class="logText"></pre>
+          </div>
+        </section>
+
+        <section class="card column">
+          <div class="cardTitle" data-i18n="chatTitle">Sohbet</div>
+          <div id="chatMessages" class="chatMessages"></div>
+          <div class="chatInputRow">
+            <input
+              id="chatInput"
+              class="input"
+              placeholder="Mesaj yaz..."
+              data-i18n-placeholder="chatPlaceholder"
+              autocomplete="off"
+            />
+            <button id="chatSendBtn" class="btn primary" data-i18n="sendBtn">Gönder</button>
+          </div>
+
+          <div class="cardTitle secondary" data-i18n="audioTitle">Ses Kontrolleri</div>
+          <button id="speakerBtn" class="btn" data-i18n="speakerOn">Sesi Kapat</button>
+          <div id="audioList" class="audioList"></div>
+        </section>
+      </div>
 
       <footer class="footer">
         <small>
-          Server URL: <code id="serverUrl"></code>
+          <span data-i18n="serverUrlFooter">Server URL:</span> <code id="serverUrl"></code>
         </small>
       </footer>
     </main>
