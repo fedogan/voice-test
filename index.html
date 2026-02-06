@@ -68,6 +68,12 @@
             <button id="leaveBtn" class="btn danger" disabled data-i18n="leaveBtn">Çık</button>
           </div>
 
+          <div class="row">
+            <button id="screenShareBtn" class="btn" disabled data-i18n="screenShareStart">
+              Ekran Paylaş
+            </button>
+          </div>
+
           <div class="status">
             <div class="statusTitle" data-i18n="statusTitle">Durum</div>
             <pre id="statusText" class="statusText">Hazır.</pre>
@@ -101,6 +107,14 @@
           <div class="cardTitle secondary" data-i18n="audioTitle">Ses Kontrolleri</div>
           <button id="speakerBtn" class="btn" data-i18n="speakerOn">Sesi Kapat</button>
           <div id="audioList" class="audioList"></div>
+
+          <div class="cardTitle secondary" data-i18n="screenShareTitle">Ekran Paylaşımı</div>
+          <div class="screenContainer">
+            <video id="screenVideo" autoplay playsinline muted></video>
+            <div id="screenStatus" class="mutedText" data-i18n="screenShareEmpty">
+              Ekran paylaşımı yok.
+            </div>
+          </div>
         </section>
       </div>
 

@@ -28,7 +28,16 @@ const t = {
   serverUrlFooter: 'Server URL:',
   roomsEmpty: 'Aktif oda yok.',
   participantsEmpty: 'Henüz kimse yok.',
-  audioEmpty: 'Henüz bağlantı yok.'
+  audioEmpty: 'Henüz bağlantı yok.',
+  screenShareStart: 'Ekran Paylaş',
+  screenShareStop: 'Paylaşımı Durdur',
+  screenShareTitle: 'Ekran Paylaşımı',
+  screenShareEmpty: 'Ekran paylaşımı yok.',
+  screenShareStarted: 'Ekran paylaşımı başladı.',
+  screenShareStopped: 'Ekran paylaşımı durduruldu.',
+  screenShareUnsupported: 'Bu cihazda ekran paylaşımı desteklenmiyor.',
+  screenShareError: 'Ekran paylaşımı başlatılamadı.',
+  screenShareEnded: 'Ekran paylaşımı bitti.'
 };
 
 function setText() {
@@ -61,7 +70,10 @@ const els = {
   chatSendBtn: document.getElementById('chatSendBtn'),
   noiseToggle: document.getElementById('noiseToggle'),
   speakerBtn: document.getElementById('speakerBtn'),
-  audioList: document.getElementById('audioList')
+  audioList: document.getElementById('audioList'),
+  screenShareBtn: document.getElementById('screenShareBtn'),
+  screenVideo: document.getElementById('screenVideo'),
+  screenStatus: document.getElementById('screenStatus')
 };
 
 function getQueryServerUrl() {
@@ -88,6 +100,10 @@ let noiseEnabled = true;
 let manualLeave = false;
 let pendingJoin = null;
 let currentNickname = null;
+let screenStream = null;
+let screenTrack = null;
+let isScreenSharing = false;
+let activeScreenPeerId = null;
 
 const peers = new Map(); // peerId -> { pc, audioEl, pendingCandidates: [] }
 const participants = new Map(); // id -> nickname
@@ -133,6 +149,31 @@ function updateSpeakerButton() {
   els.speakerBtn.textContent = isSpeakerMuted ? t.speakerOff : t.speakerOn;
 }
 
+function updateScreenShareButton() {
+  if (!els.screenShareBtn) return;
+  els.screenShareBtn.textContent = isScreenSharing ? t.screenShareStop : t.screenShareStart;
+}
+
+function setScreenStatusText(text) {
+  if (!els.screenStatus) return;
+  els.screenStatus.textContent = text;
+}
+
+function setScreenVideoStream(stream, ownerId) {
+  if (!els.screenVideo) return;
+  els.screenVideo.srcObject = stream || null;
+  activeScreenPeerId = stream ? ownerId : null;
+}
+
+function clearScreenVideo(message) {
+  setScreenVideoStream(null, null);
+  setScreenStatusText(message || t.screenShareEmpty);
+}
+
+function isScreenShareSupported() {
+  return Boolean(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+}
+
 function setUiState({ inRoom }) {
   els.roomId.disabled = inRoom;
   els.joinBtn.disabled = inRoom;
@@ -143,6 +184,7 @@ function setUiState({ inRoom }) {
   if (els.nicknameInput) els.nicknameInput.disabled = inRoom;
   if (els.chatInput) els.chatInput.disabled = !inRoom;
   if (els.chatSendBtn) els.chatSendBtn.disabled = !inRoom;
+  if (els.screenShareBtn) els.screenShareBtn.disabled = !inRoom;
 }
 
 function renderParticipants() {
@@ -244,6 +286,105 @@ async function ensureLocalStream({ forceNew = false } = {}) {
   }
 }
 
+function getScreenSender(pc) {
+  return pc.getSenders().find((sender) => sender.track && sender.track.kind === 'video') || null;
+}
+
+async function renegotiatePeer(peerId, reason) {
+  const info = peers.get(peerId);
+  if (!info || !socket) return;
+  const { pc } = info;
+  if (info.isMakingOffer || pc.signalingState !== 'stable') return;
+  info.isMakingOffer = true;
+  try {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('signal', { to: peerId, from: socket.id, data: pc.localDescription });
+    if (reason) log(`Yeniden pazarlık (${reason}): ${peerId}`);
+  } catch (err) {
+    log(`Yeniden pazarlık hatası ${peerId}: ${err.message || err}`);
+  } finally {
+    info.isMakingOffer = false;
+  }
+}
+
+function attachScreenTrackToPeer(peerId) {
+  const info = peers.get(peerId);
+  if (!info || !screenTrack) return;
+  const sender = getScreenSender(info.pc);
+  if (sender) {
+    sender.replaceTrack(screenTrack);
+  } else {
+    info.pc.addTrack(screenTrack, screenStream);
+  }
+  renegotiatePeer(peerId, 'ekran paylaşımı');
+}
+
+function detachScreenTrackFromPeer(peerId) {
+  const info = peers.get(peerId);
+  if (!info) return;
+  const sender = getScreenSender(info.pc);
+  if (sender) {
+    try {
+      sender.replaceTrack(null);
+      info.pc.removeTrack(sender);
+    } catch (_) {
+      // ignore remove errors for compatibility
+    }
+    renegotiatePeer(peerId, 'ekran paylaşımı durdurma');
+  }
+}
+
+async function startScreenShare() {
+  if (!isScreenShareSupported()) {
+    setStatus(t.screenShareUnsupported);
+    return;
+  }
+  if (isScreenSharing) return;
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    screenTrack = screenStream.getVideoTracks()[0];
+    if (!screenTrack) {
+      setStatus(t.screenShareError);
+      return;
+    }
+    screenTrack.onended = () => stopScreenShare('ended');
+    isScreenSharing = true;
+    updateScreenShareButton();
+    setScreenVideoStream(screenStream, socket ? socket.id : 'local');
+    setScreenStatusText(t.screenShareStarted);
+    setStatus(t.screenShareStarted);
+    peers.forEach((_info, peerId) => attachScreenTrackToPeer(peerId));
+  } catch (err) {
+    if (err && err.name === 'NotAllowedError') {
+      setStatus('Ekran paylaşımı reddedildi. Lütfen izin verip tekrar deneyin.');
+    } else {
+      setStatus(t.screenShareError);
+    }
+    log(`Ekran paylaşımı hatası: ${err.message || err}`);
+  }
+}
+
+function stopScreenShare(reason) {
+  if (!screenStream) return;
+  screenStream.getTracks().forEach((track) => track.stop());
+  screenStream = null;
+  screenTrack = null;
+  isScreenSharing = false;
+  updateScreenShareButton();
+  if (activeScreenPeerId === (socket && socket.id)) {
+    clearScreenVideo(t.screenShareStopped);
+  }
+  peers.forEach((_info, peerId) => detachScreenTrackFromPeer(peerId));
+  if (reason === 'ended') {
+    setStatus(t.screenShareEnded);
+    setScreenStatusText(t.screenShareEnded);
+  } else {
+    setStatus(t.screenShareStopped);
+    setScreenStatusText(t.screenShareStopped);
+  }
+}
+
 function createAudioElement(peerId) {
   const audio = document.createElement('audio');
   audio.autoplay = true;
@@ -270,6 +411,9 @@ function cleanupPeer(peerId) {
   }
   removeAudioElement(peerId);
   peers.delete(peerId);
+  if (activeScreenPeerId === peerId) {
+    clearScreenVideo(t.screenShareEnded);
+  }
 }
 
 function cleanupAllPeers() {
@@ -442,6 +586,7 @@ function ensureSocket() {
 
   socket.on('disconnect', () => {
     const wasInRoom = Boolean(currentRoomId);
+    if (isScreenSharing) stopScreenShare('disconnect');
     cleanupAllPeers();
     participants.clear();
     renderParticipants();
@@ -584,11 +729,15 @@ function createPeerConnection(peerId, shouldCreateOffer) {
   const info = {
     pc,
     audioEl: createAudioElement(peerId),
-    pendingCandidates: []
+    pendingCandidates: [],
+    isMakingOffer: false
   };
 
   if (localStream) {
     localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+  }
+  if (screenTrack && screenStream) {
+    pc.addTrack(screenTrack, screenStream);
   }
 
   pc.onicecandidate = (event) => {
@@ -600,6 +749,18 @@ function createPeerConnection(peerId, shouldCreateOffer) {
 
   pc.ontrack = (event) => {
     const [stream] = event.streams;
+    if (event.track.kind === 'video') {
+      const videoStream = stream || new MediaStream([event.track]);
+      setScreenVideoStream(videoStream, peerId);
+      setScreenStatusText(`Ekran paylaşımı: ${participants.get(peerId) || peerId}`);
+      event.track.onended = () => {
+        if (activeScreenPeerId === peerId) {
+          clearScreenVideo(t.screenShareEnded);
+          setStatus(t.screenShareEnded);
+        }
+      };
+      return;
+    }
     if (stream) {
       info.audioEl.srcObject = stream;
     } else {
@@ -621,6 +782,10 @@ function createPeerConnection(peerId, shouldCreateOffer) {
 
   pc.oniceconnectionstatechange = () => {
     log(`ICE durumu ${peerId}: ${pc.iceConnectionState}`);
+  };
+
+  pc.onnegotiationneeded = () => {
+    renegotiatePeer(peerId, 'negotiationneeded');
   };
 
   peers.set(peerId, info);
@@ -671,6 +836,7 @@ async function startJoinFlow(roomId) {
 function leaveRoom() {
   manualLeave = true;
   pendingJoin = null;
+  if (isScreenSharing) stopScreenShare('manual');
   cleanupAllPeers();
 
   if (localStream) {
@@ -770,6 +936,16 @@ if (els.speakerBtn) {
   });
 }
 
+if (els.screenShareBtn) {
+  els.screenShareBtn.addEventListener('click', () => {
+    if (isScreenSharing) {
+      stopScreenShare('manual');
+    } else {
+      startScreenShare();
+    }
+  });
+}
+
 if (els.refreshRoomsBtn) {
   els.refreshRoomsBtn.addEventListener('click', () => {
     const s = ensureSocket();
@@ -797,6 +973,8 @@ log('Hazır.');
 updateServerUrlDisplay();
 updateMuteButton();
 updateSpeakerButton();
+updateScreenShareButton();
+setScreenStatusText(t.screenShareEmpty);
 
 const storedNickname = localStorage.getItem('voice-nickname');
 if (els.nicknameInput) {
