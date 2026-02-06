@@ -6,7 +6,7 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 const path = require('path');
 
-const PORT = Number(process.env.PORT || 3001);
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 
 const app = express();
