@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mini-voice</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="header">
+        <h1>mini-voice</h1>
+        <p class="subtitle">Minimal signaling demo (room + join/leave + mute state)</p>
+      </header>
+
+      <section class="card">
+        <div class="row">
+          <label for="roomId" class="label">Room ID</label>
+          <input id="roomId" class="input" placeholder="örn: abc123" autocomplete="off" />
+        </div>
+
+        <div class="row">
+          <label for="serverUrlInput" class="label">Signaling Server URL</label>
+          <input
+            id="serverUrlInput"
+            class="input"
+            placeholder="örn: https://your-signal-server.com"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="row buttons">
+          <button id="joinBtn" class="btn primary">Join</button>
+          <button id="createBtn" class="btn">Create</button>
+          <button id="muteBtn" class="btn" disabled>Mute</button>
+          <button id="leaveBtn" class="btn danger" disabled>Leave</button>
+        </div>
+
+        <div class="status">
+          <div class="statusTitle">Durum</div>
+          <pre id="statusText" class="statusText">Hazır.</pre>
+        </div>
+
+        <div class="status">
+          <div class="statusTitle">Odada kullanıcılar</div>
+          <ul id="usersList" class="users"></ul>
+        </div>
+
+        <div class="status logPanel">
+          <div class="statusTitle">Log</div>
+          <pre id="log" class="logText"></pre>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <small>
+          Server URL: <code id="serverUrl"></code>
+        </small>
+      </footer>
+    </main>
+
+    <!-- Socket.io client (CDN) -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
+
