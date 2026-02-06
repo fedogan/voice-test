@@ -104,6 +104,7 @@ let screenStream = null;
 let screenTrack = null;
 let isScreenSharing = false;
 let activeScreenPeerId = null;
+let currentMicTrack = null;
 
 const peers = new Map(); // peerId -> { pc, audioEl, pendingCandidates: [] }
 const participants = new Map(); // id -> nickname
@@ -253,27 +254,18 @@ function applyMuteToTrack(track) {
   track.enabled = !isMuted;
 }
 
-function replaceAudioTrack(newTrack) {
-  peers.forEach((info) => {
-    info.pc.getSenders().forEach((sender) => {
-      if (sender.track && sender.track.kind === 'audio') {
-        sender.replaceTrack(newTrack);
-      }
-    });
-  });
-}
-
 async function ensureLocalStream({ forceNew = false } = {}) {
   if (localStream && !forceNew) return localStream;
   try {
     const newStream = await navigator.mediaDevices.getUserMedia(getAudioConstraints());
-    const [newTrack] = newStream.getAudioTracks();
-    applyMuteToTrack(newTrack);
+    const [micTrack] = newStream.getAudioTracks();
+    currentMicTrack = micTrack || null;
+    applyMuteToTrack(currentMicTrack);
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop());
     }
     localStream = newStream;
-    if (newTrack) replaceAudioTrack(newTrack);
+    setupMicForAllPeers();
     return localStream;
   } catch (err) {
     if (err && err.name === 'NotAllowedError') {
@@ -286,8 +278,40 @@ async function ensureLocalStream({ forceNew = false } = {}) {
   }
 }
 
-function getScreenSender(pc) {
-  return pc.getSenders().find((sender) => sender.track && sender.track.kind === 'video') || null;
+function setupMicForPeer(peerId, pc) {
+  const targetPc = pc || (peers.get(peerId) && peers.get(peerId).pc);
+  if (!targetPc) return;
+  const info = peers.get(peerId);
+  const audioTransceiver = info ? info.audioTransceiver : null;
+  const sender = audioTransceiver ? audioTransceiver.sender : targetPc.getSenders().find((s) => s.track && s.track.kind === 'audio');
+  if (!sender) {
+    // eslint-disable-next-line no-console
+    console.warn(`[mini-voice] audio sender yok: ${peerId}`);
+    return;
+  }
+  if (!currentMicTrack) {
+    // eslint-disable-next-line no-console
+    console.warn(`[mini-voice] currentMicTrack yok: ${peerId}`);
+    return;
+  }
+  sender.replaceTrack(currentMicTrack);
+}
+
+function setupMicForAllPeers() {
+  peers.forEach((_info, peerId) => {
+    setupMicForPeer(peerId);
+  });
+}
+
+function logPeerSenders(peerId, pc) {
+  const senders = pc.getSenders();
+  // eslint-disable-next-line no-console
+  console.log(`[mini-voice] senders (${peerId})`, senders);
+  const hasAudio = senders.some((sender) => sender.track && sender.track.kind === 'audio');
+  if (!hasAudio) {
+    // eslint-disable-next-line no-console
+    console.warn(`[mini-voice] audio sender yok: ${peerId}`);
+  }
 }
 
 async function renegotiatePeer(peerId, reason) {
@@ -311,28 +335,23 @@ async function renegotiatePeer(peerId, reason) {
 function attachScreenTrackToPeer(peerId) {
   const info = peers.get(peerId);
   if (!info || !screenTrack) return;
-  const sender = getScreenSender(info.pc);
-  if (sender) {
-    sender.replaceTrack(screenTrack);
-  } else {
-    info.pc.addTrack(screenTrack, screenStream);
+  if (info.videoTransceiver) {
+    info.videoTransceiver.direction = 'sendrecv';
+    info.videoTransceiver.sender.replaceTrack(screenTrack);
   }
   renegotiatePeer(peerId, 'ekran paylaşımı');
+  setupMicForPeer(peerId);
 }
 
 function detachScreenTrackFromPeer(peerId) {
   const info = peers.get(peerId);
   if (!info) return;
-  const sender = getScreenSender(info.pc);
-  if (sender) {
-    try {
-      sender.replaceTrack(null);
-      info.pc.removeTrack(sender);
-    } catch (_) {
-      // ignore remove errors for compatibility
-    }
+  if (info.videoTransceiver) {
+    info.videoTransceiver.sender.replaceTrack(null);
+    info.videoTransceiver.direction = 'recvonly';
     renegotiatePeer(peerId, 'ekran paylaşımı durdurma');
   }
+  setupMicForPeer(peerId);
 }
 
 async function startScreenShare() {
@@ -730,14 +749,19 @@ function createPeerConnection(peerId, shouldCreateOffer) {
     pc,
     audioEl: createAudioElement(peerId),
     pendingCandidates: [],
-    isMakingOffer: false
+    isMakingOffer: false,
+    audioTransceiver: null,
+    videoTransceiver: null
   };
 
-  if (localStream) {
-    localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+  info.audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
+  info.videoTransceiver = pc.addTransceiver('video', { direction: 'recvonly' });
+  if (currentMicTrack) {
+    info.audioTransceiver.sender.replaceTrack(currentMicTrack);
   }
   if (screenTrack && screenStream) {
-    pc.addTrack(screenTrack, screenStream);
+    info.videoTransceiver.direction = 'sendrecv';
+    info.videoTransceiver.sender.replaceTrack(screenTrack);
   }
 
   pc.onicecandidate = (event) => {
@@ -790,6 +814,8 @@ function createPeerConnection(peerId, shouldCreateOffer) {
 
   peers.set(peerId, info);
   renderAudioControls();
+  setupMicForPeer(peerId, pc);
+  logPeerSenders(peerId, pc);
 
   if (shouldCreateOffer) {
     pc.createOffer()
@@ -843,6 +869,7 @@ function leaveRoom() {
     localStream.getTracks().forEach((track) => track.stop());
     localStream = null;
   }
+  currentMicTrack = null;
 
   if (socket) {
     socket.disconnect();
@@ -908,11 +935,10 @@ els.leaveBtn.addEventListener('click', () => {
 });
 
 els.muteBtn.addEventListener('click', () => {
-  if (!localStream) return;
+  if (!currentMicTrack) return;
   isMuted = !isMuted;
-  localStream.getAudioTracks().forEach((track) => {
-    applyMuteToTrack(track);
-  });
+  applyMuteToTrack(currentMicTrack);
+  setupMicForAllPeers();
   updateMuteButton();
   setStatus([`Oda: ${currentRoomId || '-'}`, `Mikrofon: ${isMuted ? 'Sessiz' : 'Açık'}`]);
   log(`Mikrofon: ${isMuted ? 'Sessiz' : 'Açık'}`);
