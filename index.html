@@ -8,146 +8,240 @@
   </head>
   <body>
     <main class="app">
-      <header class="header">
-        <div class="headerTitle">
+      <section id="lobbyView" class="view active">
+        <div class="lobbyHeader">
+          <div class="logo">🎧</div>
           <h1>Emrecord discord değil</h1>
-          <p class="subtitle" data-i18n="subtitle">demo sürümü</p>
+          <p class="subtitle">Hızlıca odaya gir, konuş.</p>
         </div>
-        <div class="statusBar">
-          <div class="statusPill" id="statusConn">Bağlı: -</div>
-          <div class="statusPill" id="statusPing">Ping: -</div>
-          <div class="statusPill" id="statusMic">Mikrofon: -</div>
-          <div class="statusPill" id="statusScreen">Ekran: -</div>
+
+        <div class="card lobbyCard">
+          <div class="row">
+            <label for="nicknameInput" class="label" data-i18n="nicknameLabel">Takma ad</label>
+            <input
+              id="nicknameInput"
+              class="input"
+              placeholder="örn: Kullanıcı1234"
+              data-i18n-placeholder="nicknamePlaceholder"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="row">
+            <label for="roomId" class="label" data-i18n="roomIdLabel">Oda Kodu</label>
+            <input
+              id="roomId"
+              class="input"
+              placeholder="örn: abc123"
+              data-i18n-placeholder="roomIdPlaceholder"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="row buttons">
+            <button id="createBtn" class="btn primary" data-i18n="createBtn">Oda Oluştur</button>
+            <button id="joinBtn" class="btn" data-i18n="joinBtn">Odaya Katıl</button>
+          </div>
         </div>
-      </header>
+      </section>
 
-      <div class="layout">
-        <section class="card column leftColumn">
-          <div class="cardTitle" data-i18n="roomsTitle">Odalar</div>
-          <div class="roomsList" id="roomsList"></div>
-          <button id="refreshRoomsBtn" class="btn small" data-i18n="refreshRooms" title="Oda listesini yenile">
-            Yenile
-          </button>
-        </section>
+      <section id="roomView" class="view">
+        <header class="header roomHeader">
+          <div class="headerTitle">
+            <h1>Oda</h1>
+            <p class="subtitle" data-i18n="subtitle">Sohbete hoş geldin</p>
+          </div>
+          <div class="statusBar">
+            <div class="statusPill" id="statusConn">Bağlı: -</div>
+            <div class="statusPill" id="statusPing">Ping: -</div>
+            <div class="statusPill" id="statusMic">Mikrofon: -</div>
+            <div class="statusPill" id="statusScreen">Ekran: -</div>
+          </div>
+          <button id="settingsBtn" class="btn iconBtn" title="Ayarlar">⚙️</button>
+        </header>
 
-        <section class="card centerColumn">
-          <div class="mainScroll">
-            <div class="row">
-              <label for="roomId" class="label" data-i18n="roomIdLabel">Oda İsmi</label>
-              <input
-                id="roomId"
-                class="input"
-                placeholder="örn: abc123"
-                data-i18n-placeholder="roomIdPlaceholder"
-                autocomplete="off"
-              />
+        <div class="layout roomLayout">
+          <section class="card column leftColumn">
+            <div class="cardTitle" data-i18n="participantsTitle">Katılımcılar</div>
+            <ul id="usersList" class="users"></ul>
+            <div class="cardTitle secondary" data-i18n="roomsTitle">Odalar</div>
+            <div class="roomsList" id="roomsList"></div>
+            <button id="refreshRoomsBtn" class="btn small" data-i18n="refreshRooms">Yenile</button>
+          </section>
+
+          <section class="card centerColumn">
+            <div class="centerControls">
+              <button id="muteBtn" class="btn primary micBtn" disabled data-i18n="muteBtn">Mikrofon</button>
+              <div class="row">
+                <button id="screenShareBtn" class="btn" disabled data-i18n="screenShareStart">Ekran Paylaş</button>
+                <button id="speakerBtn" class="btn" data-i18n="speakerOn">Sesi Kapat</button>
+              </div>
+              <div class="row micMeter">
+                <div class="labelRow">
+                  <span class="label">Mikrofon</span>
+                  <span id="micDb" class="mutedText">- dB</span>
+                </div>
+                <div class="vu">
+                  <div id="vuFill" class="vuFill"></div>
+                </div>
+              </div>
+              <div class="row">
+                <button id="micTestBtn" class="btn">Mikrofon Testi</button>
+                <button id="echoTestBtn" class="btn">Echo Testi</button>
+                <button id="leaveBtn" class="btn danger" disabled data-i18n="leaveBtn">Çık</button>
+              </div>
+              <div class="status">
+                <div class="statusTitle" data-i18n="statusTitle">Durum</div>
+                <pre id="statusText" class="statusText">Hazır.</pre>
+              </div>
+            </div>
+          </section>
+
+          <div class="rightColumn">
+            <div class="tabBar">
+              <button class="tabBtn active" data-tab="chat">Sohbet</button>
+              <button class="tabBtn" data-tab="network">Ağ</button>
+              <button class="tabBtn" data-tab="controls">Kontroller</button>
+              <button class="tabBtn" data-tab="log">Log</button>
             </div>
 
-            <div class="row">
-              <label for="nicknameInput" class="label" data-i18n="nicknameLabel">İsmin (Sohbete bağlıysan chate /nick komutunu kullan)</label>
-              <input
-                id="nicknameInput"
-                class="input"
-                placeholder="örn: Kullanıcı1234"
-                data-i18n-placeholder="nicknamePlaceholder"
-                autocomplete="off"
-              />
-            </div>
+            <div class="tabContent">
+              <section class="card column chatCard tabPane active" data-tab="chat">
+                <div class="cardTitle" data-i18n="chatTitle">Sohbet</div>
+                <div id="chatMessages" class="chatMessages"></div>
+                <div class="chatInputRow">
+                  <input
+                    id="chatInput"
+                    class="input"
+                    placeholder="Mesaj yaz..."
+                    data-i18n-placeholder="chatPlaceholder"
+                    autocomplete="off"
+                  />
+                  <button id="chatSendBtn" class="btn primary" data-i18n="sendBtn">Gönder</button>
+                </div>
+              </section>
 
-            <div class="row">
-              <label for="serverUrlInput" class="label" data-i18n="serverUrlLabel">Signaling Server URL (bunla işin yok %99 ihtimalle)</label>
-              <input
-                id="serverUrlInput"
-                class="input"
-                placeholder="örn: https://your-signal-server.com"
-                data-i18n-placeholder="serverUrlPlaceholder"
-                autocomplete="off"
-              />
-            </div>
+              <section class="card column statsCard tabPane" data-tab="network">
+                <div class="cardTitle">Ağ İstatistikleri</div>
+                <div class="statsGrid">
+                  <div class="statItem"><span>Outbound</span><strong id="statOut">-</strong></div>
+                  <div class="statItem"><span>Inbound</span><strong id="statIn">-</strong></div>
+                  <div class="statItem"><span>Jitter</span><strong id="statJitter">-</strong></div>
+                  <div class="statItem"><span>Loss</span><strong id="statLoss">-</strong></div>
+                  <div class="statItem"><span>RTT</span><strong id="statRtt">-</strong></div>
+                </div>
+              </section>
 
-            <div class="row">
-              <label for="modeSelect" class="label">Bağlantı Modu</label>
-              <select id="modeSelect" class="input">
-                <option value="mesh">Mesh (Varsayılan)</option>
-                <option value="sfu">SFU (yakında)</option>
-              </select>
-            </div>
+              <section class="card column audioCardPanel tabPane" data-tab="controls">
+                <div class="cardTitle" data-i18n="audioTitle">Ses Kontrolleri</div>
+                <div id="audioList" class="audioList"></div>
 
+                <div class="cardTitle secondary" data-i18n="screenShareTitle">Ekran Paylaşımı</div>
+                <div class="screenContainer">
+                  <video id="screenVideo" autoplay playsinline muted></video>
+                  <button id="screenFullscreenBtn" class="btn small" data-i18n="fullscreenEnter">Tam Ekran</button>
+                  <div id="screenStatus" class="mutedText" data-i18n="screenShareEmpty">Ekran paylaşımı yok.</div>
+                </div>
+
+                <div id="moderationPanel" class="accordion">
+                  <button id="moderationToggle" class="accordionHeader">Moderasyon</button>
+                  <div class="accordionBody">
+                    <div class="row">
+                      <label class="label" for="moderationTarget">Kullanıcı</label>
+                      <select id="moderationTarget" class="input"></select>
+                    </div>
+                    <div class="row buttons">
+                      <button id="muteOtherBtn" class="btn">Sessize al</button>
+                      <button id="unmuteOtherBtn" class="btn">Sesi aç</button>
+                      <button id="kickBtn" class="btn danger">Kick</button>
+                      <button id="banBtn" class="btn danger">Ban</button>
+                    </div>
+                    <div class="row">
+                      <label class="label" for="slowModeSelect">Slow mode</label>
+                      <select id="slowModeSelect" class="input">
+                        <option value="0">Kapalı</option>
+                        <option value="2000">2 sn</option>
+                        <option value="5000">5 sn</option>
+                        <option value="10000">10 sn</option>
+                      </select>
+                      <button id="slowModeBtn" class="btn">Uygula</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="card column logCard tabPane" data-tab="log">
+                <div class="cardTitle" data-i18n="logTitle">Log</div>
+                <div class="row buttons">
+                  <button id="logCopyBtn" class="btn">Kopyala</button>
+                  <button id="logClearBtn" class="btn danger">Temizle</button>
+                </div>
+                <pre id="log" class="logText logFull"></pre>
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div id="settingsDrawer" class="drawer hidden">
+        <div class="drawerContent">
+          <div class="drawerHeader">
+            <h3>Ayarlar</h3>
+            <button id="settingsClose" class="btn small">Kapat</button>
+          </div>
+          <div class="drawerBody">
             <div class="row">
               <label for="micSelect" class="label">Mikrofon Cihazı</label>
               <select id="micSelect" class="input"></select>
             </div>
-
             <div class="row">
               <label for="outputSelect" class="label">Hoparlör Cihazı</label>
               <select id="outputSelect" class="input"></select>
             </div>
-
             <div class="row toggles">
               <label class="switch">
                 <input id="noiseToggle" type="checkbox" checked />
                 <span class="switchSlider"></span>
-                <span class="switchLabel" data-i18n="noiseToggle">Gürültü azaltma (Çalışıyoyla çalışmıyor arasında bi yerde)</span>
+                <span class="switchLabel" data-i18n="noiseToggle">Gürültü azaltma</span>
               </label>
-            </div>
-
-            <div class="row toggles">
               <label class="switch">
                 <input id="agcToggle" type="checkbox" checked />
                 <span class="switchSlider"></span>
                 <span class="switchLabel">AGC (Otomatik Gain)</span>
               </label>
-            </div>
-
-            <div class="row toggles">
-              <label class="switch">
-                <input id="listenOnlyToggle" type="checkbox" />
-                <span class="switchSlider"></span>
-                <span class="switchLabel">Listen‑only (Mikrofon kapalı)</span>
-              </label>
-              <label class="switch">
-                <input id="deafToggle" type="checkbox" />
-                <span class="switchSlider"></span>
-                <span class="switchLabel">Deaf (Sesleri kapat)</span>
-              </label>
-            </div>
-
-            <div class="row audioSettings">
               <label class="switch">
                 <input id="advancedAudioToggle" type="checkbox" checked />
                 <span class="switchSlider"></span>
                 <span class="switchLabel" data-i18n="advancedAudioToggle">Gelişmiş Gürültü Azaltma</span>
               </label>
+            </div>
+
+            <div class="row audioSettings">
               <div class="sliderRow">
                 <label class="label" for="highPassFreq" data-i18n="highPassLabel">High-pass (Hz)</label>
                 <span id="highPassValue" class="mutedText">90 Hz</span>
               </div>
               <input id="highPassFreq" type="range" min="60" max="200" step="1" value="90" />
-
               <label class="switch">
                 <input id="compressorToggle" type="checkbox" />
                 <span class="switchSlider"></span>
                 <span class="switchLabel" data-i18n="compressorToggle">Compressor</span>
               </label>
-
               <div class="sliderRow">
                 <label class="label" for="gateThreshold" data-i18n="gateThresholdLabel">Gate Threshold (dB)</label>
                 <span id="gateThresholdValue" class="mutedText">-40 dB</span>
               </div>
               <input id="gateThreshold" type="range" min="-60" max="-20" step="1" value="-40" />
-
               <div class="sliderRow">
                 <label class="label" for="gateAttack" data-i18n="gateAttackLabel">Gate Attack (ms)</label>
                 <span id="gateAttackValue" class="mutedText">5 ms</span>
               </div>
               <input id="gateAttack" type="range" min="1" max="50" step="1" value="5" />
-
               <div class="sliderRow">
                 <label class="label" for="gateRelease" data-i18n="gateReleaseLabel">Gate Release (ms)</label>
                 <span id="gateReleaseValue" class="mutedText">150 ms</span>
               </div>
               <input id="gateRelease" type="range" min="20" max="400" step="1" value="150" />
-
               <div class="sliderRow">
                 <label class="label" for="gateFloor" data-i18n="gateFloorLabel">Gate Floor (dB)</label>
                 <span id="gateFloorValue" class="mutedText">-60 dB</span>
@@ -155,155 +249,43 @@
               <input id="gateFloor" type="range" min="-80" max="-30" step="1" value="-60" />
             </div>
 
-            <div class="row buttons">
-              <button id="joinBtn" class="btn primary" data-i18n="joinBtn" title="Odaya katıl">Katıl</button>
-              <button id="createBtn" class="btn" data-i18n="createBtn" title="Yeni oda oluştur">Oda oluştur</button>
-              <button id="muteBtn" class="btn" disabled data-i18n="muteBtn" title="Mikrofonu sessize al">
-                Mikrofon Sessiz
-              </button>
-              <button id="leaveBtn" class="btn danger" disabled data-i18n="leaveBtn" title="Odadan çık">
-                Çık
-              </button>
-            </div>
-
-          <div class="row micMeter">
-            <div class="labelRow">
-              <span class="label">Mikrofon</span>
-              <span id="micDb" class="mutedText">- dB</span>
-            </div>
-            <div class="vu">
-              <div id="vuFill" class="vuFill"></div>
-            </div>
-          </div>
-
-          <div class="row">
-            <button id="micTestBtn" class="btn" title="Mikrofon test ekranı aç">
-              Mikrofon Testi
-            </button>
-            <button id="echoTestBtn" class="btn" title="Echo/latency testi yap">
-              Echo Testi
-            </button>
-          </div>
-
-            <div class="row">
-              <button id="screenShareBtn" class="btn" disabled data-i18n="screenShareStart" title="Ekran paylaşımını başlat">
-                Ekran Paylaş
-              </button>
-            </div>
-
-            <div class="status">
-              <div class="statusTitle" data-i18n="statusTitle">Durum</div>
-              <pre id="statusText" class="statusText">Hazır.</pre>
-            </div>
-
-            <div class="status">
-              <div class="statusTitle" data-i18n="participantsTitle">Katılımcılar</div>
-              <ul id="usersList" class="users"></ul>
-            </div>
-
-            
-          </div>
-        </section>
-
-        <div class="rightColumn">
-          <div class="tabBar">
-            <button class="tabBtn active" data-tab="chat">Sohbet</button>
-            <button class="tabBtn" data-tab="network">Ağ</button>
-            <button class="tabBtn" data-tab="controls">Kontroller</button>
-            <button class="tabBtn" data-tab="log">Log</button>
-          </div>
-
-          <div class="tabContent">
-            <section class="card column chatCard tabPane active" data-tab="chat">
-              <div class="cardTitle" data-i18n="chatTitle">Sohbet</div>
-              <div id="chatMessages" class="chatMessages"></div>
-              <div class="chatInputRow">
-                <input
-                  id="chatInput"
-                  class="input"
-                  placeholder="Mesaj yaz..."
-                  data-i18n-placeholder="chatPlaceholder"
-                  autocomplete="off"
-                />
-                <button id="chatSendBtn" class="btn primary" data-i18n="sendBtn" title="Mesaj gönder">
-                  Gönder
-                </button>
-              </div>
-            </section>
-
-            <section class="card column statsCard tabPane" data-tab="network">
-              <div class="cardTitle">Ağ İstatistikleri</div>
-              <div class="statsGrid">
-                <div class="statItem"><span>Outbound</span><strong id="statOut">-</strong></div>
-                <div class="statItem"><span>Inbound</span><strong id="statIn">-</strong></div>
-                <div class="statItem"><span>Jitter</span><strong id="statJitter">-</strong></div>
-                <div class="statItem"><span>Loss</span><strong id="statLoss">-</strong></div>
-                <div class="statItem"><span>RTT</span><strong id="statRtt">-</strong></div>
-              </div>
-            </section>
-
-            <section class="card column audioCardPanel tabPane" data-tab="controls">
-              <div class="cardTitle" data-i18n="audioTitle">Ses Kontrolleri</div>
-              <button id="speakerBtn" class="btn" data-i18n="speakerOn" title="Tüm uzak sesleri kapat/aç">
-                Sesi Kapat
-              </button>
-              <div id="audioList" class="audioList"></div>
-
-              <div class="cardTitle secondary" data-i18n="screenShareTitle">Ekran Paylaşımı</div>
-              <div class="screenContainer">
-                <video id="screenVideo" autoplay playsinline muted></video>
-                <button id="screenFullscreenBtn" class="btn small" data-i18n="fullscreenEnter" title="Tam ekrana al">
-                  Tam Ekran
-                </button>
-                <div id="screenStatus" class="mutedText" data-i18n="screenShareEmpty">
-                  Ekran paylaşımı yok.
+            <div class="accordion open">
+              <button class="accordionHeader">Advanced</button>
+              <div class="accordionBody">
+                <div class="row">
+                  <label for="serverUrlInput" class="label" data-i18n="serverUrlLabel">Signaling Server URL</label>
+                  <input
+                    id="serverUrlInput"
+                    class="input"
+                    placeholder="örn: https://your-signal-server.com"
+                    data-i18n-placeholder="serverUrlPlaceholder"
+                    autocomplete="off"
+                  />
+                </div>
+                <div class="row">
+                  <label for="modeSelect" class="label">Bağlantı Modu</label>
+                  <select id="modeSelect" class="input">
+                    <option value="mesh">Mesh (Varsayılan)</option>
+                    <option value="sfu">SFU (yakında)</option>
+                  </select>
+                </div>
+                <div class="row toggles">
+                  <label class="switch">
+                    <input id="listenOnlyToggle" type="checkbox" />
+                    <span class="switchSlider"></span>
+                    <span class="switchLabel">Listen‑only (Mikrofon kapalı)</span>
+                  </label>
+                  <label class="switch">
+                    <input id="deafToggle" type="checkbox" />
+                    <span class="switchSlider"></span>
+                    <span class="switchLabel">Deaf (Sesleri kapat)</span>
+                  </label>
                 </div>
               </div>
-
-              <div id="moderationPanel" class="accordion">
-                <button id="moderationToggle" class="accordionHeader">Moderasyon</button>
-                <div class="accordionBody">
-                  <div class="row">
-                    <label class="label" for="moderationTarget">Kullanıcı</label>
-                    <select id="moderationTarget" class="input"></select>
-                  </div>
-                  <div class="row buttons">
-                    <button id="muteOtherBtn" class="btn">Sessize al</button>
-                    <button id="unmuteOtherBtn" class="btn">Sesi aç</button>
-                    <button id="kickBtn" class="btn danger">Kick</button>
-                    <button id="banBtn" class="btn danger">Ban</button>
-                  </div>
-                  <div class="row">
-                    <label class="label" for="slowModeSelect">Slow mode</label>
-                    <select id="slowModeSelect" class="input">
-                      <option value="0">Kapalı</option>
-                      <option value="2000">2 sn</option>
-                      <option value="5000">5 sn</option>
-                      <option value="10000">10 sn</option>
-                    </select>
-                    <button id="slowModeBtn" class="btn">Uygula</button>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section class="card column logCard tabPane" data-tab="log">
-              <div class="cardTitle" data-i18n="logTitle">Log</div>
-              <div class="row buttons">
-                <button id="logCopyBtn" class="btn">Kopyala</button>
-                <button id="logClearBtn" class="btn danger">Temizle</button>
-              </div>
-              <pre id="log" class="logText logFull"></pre>
-            </section>
+            </div>
           </div>
         </div>
       </div>
-
-      <footer class="footer">
-        <small>
-          <span data-i18n="serverUrlFooter">Server URL:</span> <code id="serverUrl"></code>
-        </small>
-      </footer>
     </main>
     <small id="version">Sürüm 0.2.5 Beta</small>
     <div id="toastContainer" class="toastContainer"></div>

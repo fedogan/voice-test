@@ -126,6 +126,11 @@ const els = {
   moderationToggle: document.getElementById('moderationToggle'),
   logCopyBtn: document.getElementById('logCopyBtn'),
   logClearBtn: document.getElementById('logClearBtn'),
+  lobbyView: document.getElementById('lobbyView'),
+  roomView: document.getElementById('roomView'),
+  settingsBtn: document.getElementById('settingsBtn'),
+  settingsDrawer: document.getElementById('settingsDrawer'),
+  settingsClose: document.getElementById('settingsClose'),
   toastContainer: document.getElementById('toastContainer'),
   advancedAudioToggle: document.getElementById('advancedAudioToggle'),
   highPassFreq: document.getElementById('highPassFreq'),
@@ -228,6 +233,7 @@ let micTestLoopRunning = false;
 let statsIntervalId = null;
 let lastStatsSample = null;
 let activeTab = 'chat';
+let currentView = 'lobby';
 
 const audioContainer = document.createElement('div');
 audioContainer.style.display = 'none';
@@ -822,6 +828,19 @@ function updateStatusBar() {
   }
 }
 
+function setView(nextView) {
+  currentView = nextView;
+  if (els.lobbyView) {
+    els.lobbyView.classList.toggle('active', nextView === 'lobby');
+  }
+  if (els.roomView) {
+    els.roomView.classList.toggle('active', nextView === 'room');
+  }
+  if (nextView === 'lobby' && els.settingsDrawer) {
+    els.settingsDrawer.classList.add('hidden');
+  }
+}
+
 function updateModerationTargets() {
   if (!els.moderationTarget) return;
   els.moderationTarget.innerHTML = '';
@@ -1403,6 +1422,7 @@ function ensureSocket() {
     stopStatsLoop();
     currentHostId = null;
     setUiState({ inRoom: false });
+    setView('lobby');
     isMuted = false;
     updateMuteButton();
     if (wasInRoom && !manualLeave) {
@@ -1444,6 +1464,7 @@ function ensureSocket() {
     currentHostId = hostId || null;
     manualLeave = false;
     setUiState({ inRoom: true });
+    setView('room');
     participants.clear();
     if (socket && socket.id) {
       participants.set(socket.id, currentNickname || 'Ben');
@@ -1754,6 +1775,7 @@ function leaveRoom() {
   renderAudioControls();
   clearChat();
   setUiState({ inRoom: false });
+  setView('lobby');
   updateMuteButton();
   updateStatusBar();
   setStatus('Odadan çıkıldı.');
@@ -2000,6 +2022,18 @@ if (els.screenFullscreenBtn) {
   });
 }
 
+if (els.settingsBtn) {
+  els.settingsBtn.addEventListener('click', () => {
+    if (els.settingsDrawer) els.settingsDrawer.classList.remove('hidden');
+  });
+}
+
+if (els.settingsClose) {
+  els.settingsClose.addEventListener('click', () => {
+    if (els.settingsDrawer) els.settingsDrawer.classList.add('hidden');
+  });
+}
+
 document.addEventListener('fullscreenchange', updateFullscreenButton);
 document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
 
@@ -2083,6 +2117,7 @@ loadDeviceSettings();
 updateAudioSettingsUI();
 if (els.agcToggle) els.agcToggle.checked = agcEnabled;
 setUiState({ inRoom: false });
+setView('lobby');
 setStatus('Hazır. Oda ID girip katılabilirsin.');
 log('Hazır.');
 updateServerUrlDisplay();
