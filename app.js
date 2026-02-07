@@ -194,6 +194,7 @@ let processedTrack = null;
 const AUDIO_SETTINGS_KEY = 'voice-advanced-audio';
 const DEVICE_SETTINGS_KEY = 'voice-devices';
 const TAB_SETTINGS_KEY = 'voice-right-tab';
+const LAST_ROOM_KEY = 'voice-last-room';
 const audioSettings = {
   gateThreshold: -40,
   gateAttack: 5,
@@ -1017,6 +1018,10 @@ function renderRoomsList(rooms) {
     });
     els.roomsList.appendChild(item);
   });
+  const activeItem = els.roomsList.querySelector('.roomItem.active');
+  if (activeItem) {
+    activeItem.scrollIntoView({ block: 'nearest' });
+  }
 }
 
 function randomRoomId() {
@@ -1461,6 +1466,7 @@ function ensureSocket() {
       return;
     }
     currentRoomId = roomId;
+    localStorage.setItem(LAST_ROOM_KEY, roomId);
     currentHostId = hostId || null;
     manualLeave = false;
     setUiState({ inRoom: true });
@@ -1485,6 +1491,7 @@ function ensureSocket() {
     peersInRoom.forEach((peer) => {
       createPeerConnection(peer.id, true);
     });
+    socket.emit('list-rooms');
     startStatsLoop();
   });
 
@@ -2130,6 +2137,11 @@ setScreenStatusText(t.screenShareEmpty);
 updateDeviceLists();
 if (deviceSettings.outputId) {
   applyOutputDevice(deviceSettings.outputId);
+}
+const lastRoom = localStorage.getItem(LAST_ROOM_KEY);
+if (lastRoom && els.roomId) {
+  els.roomId.value = lastRoom;
+  currentRoomId = lastRoom;
 }
 initTabs();
 if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
