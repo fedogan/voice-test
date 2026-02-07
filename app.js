@@ -878,21 +878,24 @@ function updateModerationUI() {
 }
 
 function setActiveTab(tabName) {
-  activeTab = tabName;
+  let target = tabName || 'chat';
+  const targetPane = document.querySelector(`.tabPane[data-tab="${target}"]`);
+  if (!targetPane) target = 'chat';
+  activeTab = target;
   const tabs = document.querySelectorAll('.tabBtn');
   const panes = document.querySelectorAll('.tabPane');
   tabs.forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.tab === tabName);
+    btn.classList.toggle('active', btn.dataset.tab === target);
   });
   panes.forEach((pane) => {
-    pane.classList.toggle('active', pane.dataset.tab === tabName);
+    pane.classList.toggle('active', pane.dataset.tab === target);
   });
-  localStorage.setItem(TAB_SETTINGS_KEY, tabName);
+  localStorage.setItem(TAB_SETTINGS_KEY, target);
 }
 
 function initTabs() {
   const saved = localStorage.getItem(TAB_SETTINGS_KEY);
-  if (saved) setActiveTab(saved);
+  setActiveTab(saved || 'chat');
   const tabs = document.querySelectorAll('.tabBtn');
   tabs.forEach((btn) => {
     btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
@@ -991,14 +994,21 @@ function renderRoomsList(rooms) {
   if (!els.roomsList) return;
   els.roomsList.innerHTML = '';
   const list = Array.isArray(rooms) ? rooms : [];
-  if (list.length === 0) {
+  const sorted = currentRoomId
+    ? [...list].sort((a, b) => {
+      if (a.roomId === currentRoomId) return -1;
+      if (b.roomId === currentRoomId) return 1;
+      return 0;
+    })
+    : list;
+  if (sorted.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'mutedText';
     empty.textContent = t.roomsEmpty;
     els.roomsList.appendChild(empty);
     return;
   }
-  list.forEach((room) => {
+  sorted.forEach((room) => {
     const item = document.createElement('div');
     item.className = 'roomItem';
     if (currentRoomId && room.roomId === currentRoomId) {
