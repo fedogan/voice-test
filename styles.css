@@ -31,11 +31,16 @@ body {
   color: var(--text);
   min-height: 100vh;
   min-width: 1100px;
+  overflow: hidden;
 }
 
 .app {
   width: min(1320px, 92vw);
-  margin: 32px auto 40px;
+  margin: 0 auto;
+  padding: 28px 0 20px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* header */
@@ -83,12 +88,48 @@ body {
   display: grid;
   grid-template-columns: minmax(220px, 0.75fr) minmax(320px, 1.1fr) minmax(320px, 1.25fr);
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 
 .column {
   display: grid;
   gap: 14px;
+}
+
+.leftColumn,
+.centerColumn,
+.rightColumn {
+  min-height: 0;
+}
+
+.leftColumn {
+  display: flex;
+  flex-direction: column;
+}
+
+.centerColumn {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rightColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+  height: 100%;
+}
+
+.mainScroll {
+  display: grid;
+  gap: 14px;
+  overflow-y: auto;
+  padding-right: 6px;
+  flex: 1;
+  min-height: 0;
 }
 
 /* cards */
@@ -296,8 +337,8 @@ body {
 .roomsList {
   display: grid;
   gap: 10px;
-  max-height: 460px;
   overflow: auto;
+  flex: 1;
   padding-right: 4px;
 }
 
@@ -336,8 +377,7 @@ body {
 
 /* chat */
 .chatMessages {
-  min-height: 260px;
-  max-height: 360px;
+  min-height: 0;
   overflow: auto;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(148, 163, 184, 0.22);
@@ -345,6 +385,7 @@ body {
   background: rgba(2, 6, 23, 0.5);
   display: grid;
   gap: 10px;
+  flex: 1;
 }
 
 .chatMessage {
@@ -370,11 +411,29 @@ body {
   grid-template-columns: 1fr auto;
   gap: 10px;
   align-items: center;
+  margin-top: auto;
 }
 
 /* audio */
 .audioCardPanel {
   gap: 12px;
+}
+
+.chatCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.audioControls {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: auto;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
 }
 
 .audioList {
@@ -490,6 +549,7 @@ input[type='range']::-moz-range-thumb {
 .footer {
   margin-top: 16px;
   color: var(--muted);
+  flex-shrink: 0;
 }
 
 .footer code {
@@ -500,9 +560,12 @@ input[type='range']::-moz-range-thumb {
 #versiona {
   font-size: 12px;
   color: var(--muted);
-  display: block;
-  margin: 6px auto 20px;
+  position: fixed;
+  bottom: 10px;
+  left: 0;
+  right: 0;
   text-align: center;
+  pointer-events: none;
 }
 
 /* focus */
