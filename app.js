@@ -10,7 +10,7 @@ const t = {
   nicknamePlaceholder: 'örn: Caryx',
   serverUrlLabel: 'Signaling Server URL (bunla işin yok %99 ihtimalle)',
   serverUrlPlaceholder: 'örn: ?server=https://diye-olan-bi-link.com',
-  noiseToggle: 'Gürültü azaltma',
+  noiseToggle: 'Gürültü azaltma (Bunu kapatınca bazen buglar düzeliyor)',
   joinBtn: 'Katıl',
   createBtn: 'Oda oluştur',
   muteBtn: 'Mikrofonu Sessize Al',
@@ -92,6 +92,8 @@ const els = {
   statusPing: document.getElementById('statusPing'),
   statusMic: document.getElementById('statusMic'),
   statusScreen: document.getElementById('statusScreen'),
+  vuFill: document.getElementById('vuFill'),
+  micDb: document.getElementById('micDb'),
   advancedAudioToggle: document.getElementById('advancedAudioToggle'),
   highPassFreq: document.getElementById('highPassFreq'),
   highPassValue: document.getElementById('highPassValue'),
@@ -169,6 +171,12 @@ const participants = new Map(); // id -> nickname
 const speakerAnalysers = new Map(); // peerId -> { analyser, data, sourceNode, lastSpokeAt, speaking }
 let speakerLoopRunning = false;
 let lastSpeakerCheck = 0;
+let micAnalyser = null;
+let micAnalyserData = null;
+let micAnalyserSource = null;
+let micLoopRunning = false;
+let lastMicCheck = 0;
+let pingListenerAttached = false;
 
 const audioContainer = document.createElement('div');
 audioContainer.style.display = 'none';
@@ -350,6 +358,69 @@ function startSpeakerLoop() {
   requestAnimationFrame(loop);
 }
 
+function getActiveMicStream() {
+  if (audioSettings.advanced && processedStream) return processedStream;
+  return rawMicStream;
+}
+
+function ensureMicAnalyser() {
+  if (!audioCtx) return;
+  if (!micAnalyser) {
+    micAnalyser = audioCtx.createAnalyser();
+    micAnalyser.fftSize = 512;
+    micAnalyserData = new Uint8Array(micAnalyser.fftSize);
+  }
+  const stream = getActiveMicStream();
+  if (!stream) return;
+  if (micAnalyserSource) {
+    try { micAnalyserSource.disconnect(); } catch (_) {}
+  }
+  micAnalyserSource = audioCtx.createMediaStreamSource(stream);
+  micAnalyserSource.connect(micAnalyser);
+  startMicLoop();
+}
+
+function setVuLevel(level, db) {
+  if (els.vuFill) {
+    els.vuFill.style.width = `${level}%`;
+  }
+  if (els.micDb) {
+    els.micDb.textContent = Number.isFinite(db) ? `${db.toFixed(0)} dB` : '- dB';
+  }
+}
+
+function startMicLoop() {
+  if (micLoopRunning) return;
+  micLoopRunning = true;
+  const loop = (now) => {
+    const stream = getActiveMicStream();
+    if (!micAnalyser || !stream) {
+      micLoopRunning = false;
+      setVuLevel(0, null);
+      return;
+    }
+    if (now - lastMicCheck >= SPEAKING_POLL_MS) {
+      lastMicCheck = now;
+      if (isMuted || !currentMicTrack) {
+        setVuLevel(0, -60);
+      } else {
+        micAnalyser.getByteTimeDomainData(micAnalyserData);
+        let sum = 0;
+        for (let i = 0; i < micAnalyserData.length; i += 1) {
+          const v = (micAnalyserData[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / micAnalyserData.length);
+        const db = 20 * Math.log10(rms + 1e-9);
+        const normalized = Math.max(0, Math.min(100, ((db + 60) / 50) * 100));
+        setVuLevel(normalized, db);
+      }
+    }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+
 function ensureAudioNodes({ resetSource = false } = {}) {
   if (!audioCtx || !rawMicStream) return;
   if (!audioSourceNode || resetSource) {
@@ -423,11 +494,13 @@ async function updateProcessedTrack() {
     currentMicTrack = processedTrack || rawMicTrack;
     applyMuteToTrack(currentMicTrack);
     setupMicForAllPeers();
+    ensureMicAnalyser();
     updateStatusBar();
   } catch (err) {
     currentMicTrack = rawMicTrack;
     applyMuteToTrack(currentMicTrack);
     setupMicForAllPeers();
+    ensureMicAnalyser();
     updateStatusBar();
     setStatus(t.advancedAudioError);
     log(`Gelişmiş gürültü azaltma hatası: ${err.message || err}`);
@@ -455,10 +528,13 @@ function updateStatusBar() {
     els.statusConn.textContent = `Bağlı: ${connected ? 'Evet' : 'Hayır'}`;
   }
   if (els.statusPing) {
-    const ping = socket && socket.io && typeof socket.io.engine?.ping === 'number'
-      ? `${Math.round(socket.io.engine.ping)} ms`
-      : '-';
-    els.statusPing.textContent = `Ping: ${ping}`;
+    const rawPing = socket && socket.io && typeof socket.io.engine?.ping === 'number'
+      ? Math.round(socket.io.engine.ping)
+      : null;
+    const pingText = rawPing === null
+      ? (socket && socket.connected ? 'Ölçülüyor...' : '-')
+      : `${rawPing} ms`;
+    els.statusPing.textContent = `Ping: ${pingText}`;
   }
   if (els.statusMic) {
     const micState = currentMicTrack && !isMuted ? 'Açık' : 'Sessiz';
@@ -844,7 +920,10 @@ function renderAudioControls() {
     const card = document.createElement('div');
     card.className = 'audioCard userCard';
     card.dataset.peerId = peerId;
-
+    const speaking = speakerAnalysers.get(peerId);
+    if (speaking && speaking.speaking) {
+      card.classList.add('speaking');
+    }
     const header = document.createElement('div');
     header.className = 'audioHeader';
     const nameEl = document.createElement('div');
@@ -955,6 +1034,12 @@ function ensureSocket() {
     log(`Socket bağlandı: ${socket.id}`);
     setStatus('Bağlandı.');
     updateStatusBar();
+    if (socket.io && socket.io.engine && !pingListenerAttached) {
+      pingListenerAttached = true;
+      socket.io.engine.on('pong', () => {
+        updateStatusBar();
+      });
+    }
     socket.emit('list-rooms');
     if (pendingJoin) {
       socket.emit('join-room', pendingJoin);
@@ -1315,6 +1400,7 @@ els.muteBtn.addEventListener('click', () => {
   applyMuteToTrack(currentMicTrack);
   setupMicForAllPeers();
   updateMuteButton();
+  setVuLevel(0, -60);
   updateStatusBar();
   setStatus([`Oda: ${currentRoomId || '-'}`, `Mikrofon: ${isMuted ? 'Sessiz' : 'Açık'}`]);
   log(`Mikrofon: ${isMuted ? 'Sessiz' : 'Açık'}`);
@@ -1482,4 +1568,4 @@ if (els.serverUrlInput) {
 ensureSocket();
 setInterval(() => {
   updateStatusBar();
-}, 5000);
+}, 1000);
