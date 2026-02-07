@@ -160,9 +160,15 @@ const audioSettings = {
 };
 
 const AUDIO_GATE_DEBUG = false;
+const SPEAKING_THRESHOLD_DB = -45;
+const SPEAKING_HOLD_MS = 200;
+const SPEAKING_POLL_MS = 100;
 
 const peers = new Map(); // peerId -> { pc, audioEl, pendingCandidates: [] }
 const participants = new Map(); // id -> nickname
+const speakerAnalysers = new Map(); // peerId -> { analyser, data, sourceNode, lastSpokeAt, speaking }
+let speakerLoopRunning = false;
+let lastSpeakerCheck = 0;
 
 const audioContainer = document.createElement('div');
 audioContainer.style.display = 'none';
@@ -265,6 +271,83 @@ function updateCompressorParams() {
   compressorNode.ratio.value = 3;
   compressorNode.attack.value = 0.006;
   compressorNode.release.value = 0.18;
+}
+
+function ensureSpeakingAnalyser(peerId) {
+  const info = peers.get(peerId);
+  if (!info || speakerAnalysers.has(peerId)) return;
+  void ensureAudioContext().then(() => {
+    if (speakerAnalysers.has(peerId)) return;
+    try {
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      const sourceNode = audioCtx.createMediaElementSource(info.audioEl);
+      sourceNode.connect(analyser);
+      speakerAnalysers.set(peerId, {
+        analyser,
+        data: new Uint8Array(analyser.fftSize),
+        sourceNode,
+        lastSpokeAt: 0,
+        speaking: false
+      });
+      startSpeakerLoop();
+    } catch (err) {
+      log(`Konusma algilama basarisiz: ${err.message || err}`);
+    }
+  });
+}
+
+function cleanupSpeakingAnalyser(peerId) {
+  const entry = speakerAnalysers.get(peerId);
+  if (!entry) return;
+  try {
+    entry.sourceNode.disconnect();
+    entry.analyser.disconnect();
+  } catch (_) {
+    // ignore cleanup errors
+  }
+  speakerAnalysers.delete(peerId);
+}
+
+function updateSpeakingClass(peerId, isSpeaking) {
+  const card = document.querySelector(`.userCard[data-peer-id="${peerId}"]`);
+  if (!card) return;
+  card.classList.toggle('speaking', isSpeaking);
+}
+
+function startSpeakerLoop() {
+  if (speakerLoopRunning) return;
+  speakerLoopRunning = true;
+  const loop = (now) => {
+    if (speakerAnalysers.size === 0) {
+      speakerLoopRunning = false;
+      return;
+    }
+    if (now - lastSpeakerCheck >= SPEAKING_POLL_MS) {
+      lastSpeakerCheck = now;
+      speakerAnalysers.forEach((entry, peerId) => {
+        entry.analyser.getByteTimeDomainData(entry.data);
+        let sum = 0;
+        for (let i = 0; i < entry.data.length; i += 1) {
+          const v = (entry.data[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / entry.data.length);
+        const db = 20 * Math.log10(rms + 1e-9);
+        const isActive = db > SPEAKING_THRESHOLD_DB;
+        if (isActive) {
+          entry.lastSpokeAt = now;
+        }
+        const shouldSpeak = isActive || now - entry.lastSpokeAt < SPEAKING_HOLD_MS;
+        if (shouldSpeak !== entry.speaking) {
+          entry.speaking = shouldSpeak;
+          updateSpeakingClass(peerId, shouldSpeak);
+        }
+      });
+    }
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
 }
 
 function ensureAudioNodes({ resetSource = false } = {}) {
@@ -701,6 +784,7 @@ function cleanupPeer(peerId) {
     // ignore cleanup errors
   }
   removeAudioElement(peerId);
+  cleanupSpeakingAnalyser(peerId);
   peers.delete(peerId);
   if (activeScreenPeerId === peerId) {
     clearScreenVideo(t.screenShareEnded);
@@ -758,7 +842,8 @@ function renderAudioControls() {
     const nickname = participants.get(peerId) || peerId;
     const settings = loadRemoteSettings(nickname);
     const card = document.createElement('div');
-    card.className = 'audioCard';
+    card.className = 'audioCard userCard';
+    card.dataset.peerId = peerId;
 
     const header = document.createElement('div');
     header.className = 'audioHeader';
@@ -1069,6 +1154,7 @@ function createPeerConnection(peerId, shouldCreateOffer) {
       const fallback = new MediaStream([event.track]);
       info.audioEl.srcObject = fallback;
     }
+    ensureSpeakingAnalyser(peerId);
     applyRemoteAudioSettings(peerId);
   };
 

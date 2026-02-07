@@ -450,6 +450,13 @@ body {
   gap: 8px;
 }
 
+.userCard.speaking {
+  border: 1px solid var(--accent);
+  box-shadow:
+    0 0 0 3px rgba(56, 217, 169, 0.2),
+    0 8px 24px rgba(56, 217, 169, 0.28);
+}
+
 .audioHeader {
   display: flex;
   justify-content: space-between;
