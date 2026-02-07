@@ -183,6 +183,16 @@ body {
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 
+select.input {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
+}
+
 .input:focus {
   border-color: rgba(91, 124, 250, 0.65);
   box-shadow: var(--ring);
@@ -419,6 +429,33 @@ body {
   gap: 12px;
 }
 
+.statsCard {
+  gap: 10px;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.statItem {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(2, 6, 23, 0.5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.statItem strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
 .chatCard {
   display: flex;
   flex-direction: column;
@@ -535,6 +572,69 @@ input[type='range']::-moz-range-thumb {
   border-radius: inherit;
   background: linear-gradient(90deg, rgba(56, 217, 169, 0.95), rgba(91, 124, 250, 0.95));
   transition: width 0.12s ease;
+}
+
+.toastContainer {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: grid;
+  gap: 10px;
+  z-index: 50;
+}
+
+.toast {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+.toast.success {
+  border-color: rgba(56, 217, 169, 0.5);
+}
+
+.toast.warn {
+  border-color: rgba(255, 107, 107, 0.6);
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modalContent {
+  width: 420px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.modalBody {
+  display: grid;
+  gap: 12px;
 }
 
 /* screen */

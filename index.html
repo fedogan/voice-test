@@ -65,11 +65,50 @@
               />
             </div>
 
+            <div class="row">
+              <label for="modeSelect" class="label">Bağlantı Modu</label>
+              <select id="modeSelect" class="input">
+                <option value="mesh">Mesh (Varsayılan)</option>
+                <option value="sfu">SFU (yakında)</option>
+              </select>
+            </div>
+
+            <div class="row">
+              <label for="micSelect" class="label">Mikrofon Cihazı</label>
+              <select id="micSelect" class="input"></select>
+            </div>
+
+            <div class="row">
+              <label for="outputSelect" class="label">Hoparlör Cihazı</label>
+              <select id="outputSelect" class="input"></select>
+            </div>
+
             <div class="row toggles">
               <label class="switch">
                 <input id="noiseToggle" type="checkbox" checked />
                 <span class="switchSlider"></span>
                 <span class="switchLabel" data-i18n="noiseToggle">Gürültü azaltma (Çalışıyoyla çalışmıyor arasında bi yerde)</span>
+              </label>
+            </div>
+
+            <div class="row toggles">
+              <label class="switch">
+                <input id="agcToggle" type="checkbox" checked />
+                <span class="switchSlider"></span>
+                <span class="switchLabel">AGC (Otomatik Gain)</span>
+              </label>
+            </div>
+
+            <div class="row toggles">
+              <label class="switch">
+                <input id="listenOnlyToggle" type="checkbox" />
+                <span class="switchSlider"></span>
+                <span class="switchLabel">Listen‑only (Mikrofon kapalı)</span>
+              </label>
+              <label class="switch">
+                <input id="deafToggle" type="checkbox" />
+                <span class="switchSlider"></span>
+                <span class="switchLabel">Deaf (Sesleri kapat)</span>
               </label>
             </div>
 
@@ -137,6 +176,15 @@
             </div>
           </div>
 
+          <div class="row">
+            <button id="micTestBtn" class="btn" title="Mikrofon test ekranı aç">
+              Mikrofon Testi
+            </button>
+            <button id="echoTestBtn" class="btn" title="Echo/latency testi yap">
+              Echo Testi
+            </button>
+          </div>
+
             <div class="row">
               <button id="screenShareBtn" class="btn" disabled data-i18n="screenShareStart" title="Ekran paylaşımını başlat">
                 Ekran Paylaş
@@ -178,6 +226,16 @@
             </div>
           </section>
 
+          <section class="card column statsCard">
+            <div class="cardTitle">Ağ İstatistikleri</div>
+            <div class="statsGrid">
+              <div class="statItem"><span>Outbound</span><strong id="statOut">-</strong></div>
+              <div class="statItem"><span>Inbound</span><strong id="statIn">-</strong></div>
+              <div class="statItem"><span>Jitter</span><strong id="statJitter">-</strong></div>
+              <div class="statItem"><span>Loss</span><strong id="statLoss">-</strong></div>
+            </div>
+          </section>
+
           <section class="card column audioCardPanel audioControls">
             <div class="cardTitle" data-i18n="audioTitle">Ses Kontrolleri</div>
             <button id="speakerBtn" class="btn" data-i18n="speakerOn" title="Tüm uzak sesleri kapat/aç">
@@ -195,6 +253,28 @@
                 Ekran paylaşımı yok.
               </div>
             </div>
+
+            <div class="cardTitle secondary">Moderasyon</div>
+            <div class="row">
+              <label class="label" for="moderationTarget">Kullanıcı</label>
+              <select id="moderationTarget" class="input"></select>
+            </div>
+            <div class="row buttons">
+              <button id="muteOtherBtn" class="btn">Sessize al</button>
+              <button id="unmuteOtherBtn" class="btn">Sesi aç</button>
+              <button id="kickBtn" class="btn danger">Kick</button>
+              <button id="banBtn" class="btn danger">Ban</button>
+            </div>
+            <div class="row">
+              <label class="label" for="slowModeSelect">Slow mode</label>
+              <select id="slowModeSelect" class="input">
+                <option value="0">Kapalı</option>
+                <option value="2000">2 sn</option>
+                <option value="5000">5 sn</option>
+                <option value="10000">10 sn</option>
+              </select>
+              <button id="slowModeBtn" class="btn">Uygula</button>
+            </div>
           </section>
         </div>
       </div>
@@ -205,7 +285,31 @@
         </small>
       </footer>
     </main>
-    <small id="version">Sürüm 0.1.0 Beta</small>
+    <small id="version">Sürüm 0.2.5 Beta</small>
+    <div id="toastContainer" class="toastContainer"></div>
+
+    <div id="micTestModal" class="modal hidden">
+      <div class="modalContent">
+        <div class="modalHeader">
+          <h3>Mikrofon Testi</h3>
+          <button id="micTestClose" class="btn small">Kapat</button>
+        </div>
+        <div class="modalBody">
+          <div class="vu">
+            <div id="micTestVuFill" class="vuFill"></div>
+          </div>
+          <div class="mutedText" id="micTestDb">- dB</div>
+          <audio id="micLoopback" autoplay></audio>
+          <div class="row">
+            <button id="micTestStart" class="btn primary">Başlat</button>
+            <button id="micTestStop" class="btn">Durdur</button>
+          </div>
+          <div class="row">
+            <div class="mutedText">Echo testi sonucu: <strong id="echoResult">-</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
     <!-- Socket.io client (CDN) -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="./app.js"></script>

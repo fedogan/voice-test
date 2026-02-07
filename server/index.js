@@ -38,7 +38,7 @@ const io = new Server(server, {
   }
 });
 
-const rooms = new Map(); // roomId -> { members: Map<string, { nickname }>, createdAt }
+const rooms = new Map(); // roomId -> { members: Map<string, { nickname }>, createdAt, hostId, banned:Set, slowModeMs }
 const socketToRoom = new Map(); // socketId -> roomId
 const socketToNick = new Map(); // socketId -> nickname
 
@@ -78,7 +78,13 @@ function normalizeMembers(roomId) {
 
 function ensureRoom(roomId) {
   if (!rooms.has(roomId)) {
-    rooms.set(roomId, { createdAt: Date.now(), members: new Map() });
+    rooms.set(roomId, {
+      createdAt: Date.now(),
+      members: new Map(),
+      hostId: null,
+      banned: new Set(),
+      slowModeMs: 0
+    });
   }
   const room = rooms.get(roomId);
   normalizeMembers(roomId);
@@ -103,7 +109,18 @@ function removeFromRoom(roomId, socketId) {
   if (!room) return;
   const members = normalizeMembers(roomId);
   if (members) members.delete(socketId);
+  if (room.hostId === socketId) {
+    const nextHost = members && members.size > 0 ? Array.from(members.keys())[0] : null;
+    room.hostId = nextHost;
+    if (nextHost) {
+      io.to(roomId).emit('host-changed', { hostId: nextHost });
+    }
+  }
   if (!members || members.size === 0) rooms.delete(roomId);
+}
+
+function isHost(room, socketId) {
+  return room && room.hostId === socketId;
 }
 
 io.on('connection', (socket) => {
@@ -129,14 +146,22 @@ io.on('connection', (socket) => {
     socket.join(cleanRoomId);
 
     const room = ensureRoom(cleanRoomId);
+    if (room.banned && room.banned.has(socket.id)) {
+      socket.emit('join-denied', { reason: 'Bu odadan yasaklandın.' });
+      return;
+    }
     room.members.set(socket.id, { nickname: cleanNickname });
+    if (!room.hostId) {
+      room.hostId = socket.id;
+    }
 
     const users = Array.from(room.members.entries())
       .filter(([id]) => id !== socket.id)
       .map(([id, data]) => ({ id, nickname: data.nickname }));
-    socket.emit('users-in-room', { roomId: cleanRoomId, users });
+    socket.emit('users-in-room', { roomId: cleanRoomId, users, hostId: room.hostId });
 
     socket.to(cleanRoomId).emit('user-joined', { id: socket.id, nickname: cleanNickname });
+    io.to(cleanRoomId).emit('host-changed', { hostId: room.hostId });
     broadcastRoomsUpdate();
   });
 
@@ -163,6 +188,15 @@ io.on('connection', (socket) => {
     if (typeof text !== 'string') return;
     const cleanText = text.trim();
     if (cleanText.length === 0 || cleanText.length > 500) return;
+    const room = rooms.get(activeRoom);
+    if (room && room.slowModeMs && room.slowModeMs > 0) {
+      const lastAt = socket.data.lastMessageAt || 0;
+      if (Date.now() - lastAt < room.slowModeMs) {
+        socket.emit('slowmode-warn', { ms: room.slowModeMs });
+        return;
+      }
+      socket.data.lastMessageAt = Date.now();
+    }
     const payload = {
       fromId: socket.id,
       nickname: socketToNick.get(socket.id) || resolveNickname(null, socket.id),
@@ -183,6 +217,44 @@ io.on('connection', (socket) => {
       if (members) members.set(socket.id, { nickname: cleanNickname });
     }
     io.to(activeRoom).emit('nickname-updated', { id: socket.id, nickname: cleanNickname });
+  });
+
+  socket.on('moderation-action', ({ roomId, action, targetId, slowModeMs } = {}) => {
+    const activeRoom = socketToRoom.get(socket.id);
+    if (!activeRoom || activeRoom !== roomId) return;
+    const room = rooms.get(activeRoom);
+    if (!isHost(room, socket.id)) {
+      socket.emit('moderation-error', { message: 'Bu işlem için yetkin yok.' });
+      return;
+    }
+    if (!room) return;
+    if (action === 'slowmode') {
+      const ms = Number(slowModeMs);
+      room.slowModeMs = Number.isFinite(ms) ? Math.max(0, ms) : 0;
+      io.to(activeRoom).emit('slowmode-updated', { ms: room.slowModeMs });
+      return;
+    }
+    if (typeof targetId !== 'string' || targetId.trim().length === 0) return;
+    const target = targetId.trim();
+    if (!room.members.has(target)) return;
+    if (action === 'mute') {
+      io.to(target).emit('force-mute', { reason: 'Host tarafından sessize alındın.' });
+      return;
+    }
+    if (action === 'unmute') {
+      io.to(target).emit('force-unmute', { reason: 'Host mikrofonu açtı.' });
+      return;
+    }
+    if (action === 'kick') {
+      io.to(target).emit('kicked', { reason: 'Host tarafından odadan çıkarıldın.' });
+      io.sockets.sockets.get(target)?.disconnect(true);
+      return;
+    }
+    if (action === 'ban') {
+      room.banned.add(target);
+      io.to(target).emit('banned', { reason: 'Host tarafından yasaklandın.' });
+      io.sockets.sockets.get(target)?.disconnect(true);
+    }
   });
 
   socket.on('disconnect', () => {

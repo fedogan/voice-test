@@ -75,6 +75,7 @@ const els = {
   usersList: document.getElementById('usersList'),
   serverUrlInput: document.getElementById('serverUrlInput'),
   serverUrl: document.getElementById('serverUrl'),
+  modeSelect: document.getElementById('modeSelect'),
   log: document.getElementById('log'),
   roomsList: document.getElementById('roomsList'),
   refreshRoomsBtn: document.getElementById('refreshRoomsBtn'),
@@ -82,6 +83,11 @@ const els = {
   chatInput: document.getElementById('chatInput'),
   chatSendBtn: document.getElementById('chatSendBtn'),
   noiseToggle: document.getElementById('noiseToggle'),
+  agcToggle: document.getElementById('agcToggle'),
+  listenOnlyToggle: document.getElementById('listenOnlyToggle'),
+  deafToggle: document.getElementById('deafToggle'),
+  micSelect: document.getElementById('micSelect'),
+  outputSelect: document.getElementById('outputSelect'),
   speakerBtn: document.getElementById('speakerBtn'),
   audioList: document.getElementById('audioList'),
   screenShareBtn: document.getElementById('screenShareBtn'),
@@ -94,6 +100,28 @@ const els = {
   statusScreen: document.getElementById('statusScreen'),
   vuFill: document.getElementById('vuFill'),
   micDb: document.getElementById('micDb'),
+  micTestBtn: document.getElementById('micTestBtn'),
+  echoTestBtn: document.getElementById('echoTestBtn'),
+  micTestModal: document.getElementById('micTestModal'),
+  micTestClose: document.getElementById('micTestClose'),
+  micTestVuFill: document.getElementById('micTestVuFill'),
+  micTestDb: document.getElementById('micTestDb'),
+  micLoopback: document.getElementById('micLoopback'),
+  micTestStart: document.getElementById('micTestStart'),
+  micTestStop: document.getElementById('micTestStop'),
+  echoResult: document.getElementById('echoResult'),
+  statOut: document.getElementById('statOut'),
+  statIn: document.getElementById('statIn'),
+  statJitter: document.getElementById('statJitter'),
+  statLoss: document.getElementById('statLoss'),
+  moderationTarget: document.getElementById('moderationTarget'),
+  muteOtherBtn: document.getElementById('muteOtherBtn'),
+  unmuteOtherBtn: document.getElementById('unmuteOtherBtn'),
+  kickBtn: document.getElementById('kickBtn'),
+  banBtn: document.getElementById('banBtn'),
+  slowModeSelect: document.getElementById('slowModeSelect'),
+  slowModeBtn: document.getElementById('slowModeBtn'),
+  toastContainer: document.getElementById('toastContainer'),
   advancedAudioToggle: document.getElementById('advancedAudioToggle'),
   highPassFreq: document.getElementById('highPassFreq'),
   highPassValue: document.getElementById('highPassValue'),
@@ -129,9 +157,13 @@ let localStream = null;
 let isMuted = false;
 let isSpeakerMuted = false;
 let noiseEnabled = true;
+let agcEnabled = true;
+let listenOnly = false;
+let isDeaf = false;
 let manualLeave = false;
 let pendingJoin = null;
 let currentNickname = null;
+let currentHostId = null;
 let screenStream = null;
 let screenTrack = null;
 let isScreenSharing = false;
@@ -150,6 +182,7 @@ let processedStream = null;
 let processedTrack = null;
 
 const AUDIO_SETTINGS_KEY = 'voice-advanced-audio';
+const DEVICE_SETTINGS_KEY = 'voice-devices';
 const audioSettings = {
   gateThreshold: -40,
   gateAttack: 5,
@@ -159,6 +192,11 @@ const audioSettings = {
   highPass: 90,
   compressor: false,
   advanced: true
+};
+
+const deviceSettings = {
+  micId: null,
+  outputId: null
 };
 
 const AUDIO_GATE_DEBUG = false;
@@ -177,6 +215,12 @@ let micAnalyserSource = null;
 let micLoopRunning = false;
 let lastMicCheck = 0;
 let pingListenerAttached = false;
+let micTestStream = null;
+let micTestAnalyser = null;
+let micTestData = null;
+let micTestLoopRunning = false;
+let statsIntervalId = null;
+let lastStatsSample = null;
 
 const audioContainer = document.createElement('div');
 audioContainer.style.display = 'none';
@@ -209,6 +253,17 @@ function log(message) {
   }
 }
 
+function showToast(message, type = 'success') {
+  if (!els.toastContainer) return;
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  els.toastContainer.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, 3000);
+}
+
 function loadAudioSettings() {
   const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
   if (!raw) return;
@@ -231,6 +286,22 @@ function saveAudioSettings() {
   localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(audioSettings));
 }
 
+function loadDeviceSettings() {
+  const raw = localStorage.getItem(DEVICE_SETTINGS_KEY);
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.micId === 'string') deviceSettings.micId = parsed.micId;
+    if (typeof parsed.outputId === 'string') deviceSettings.outputId = parsed.outputId;
+  } catch (_) {
+    // ignore parse errors
+  }
+}
+
+function saveDeviceSettings() {
+  localStorage.setItem(DEVICE_SETTINGS_KEY, JSON.stringify(deviceSettings));
+}
+
 function updateAudioSettingsUI() {
   if (els.highPassFreq) els.highPassFreq.value = String(audioSettings.highPass);
   if (els.highPassValue) els.highPassValue.textContent = `${audioSettings.highPass} Hz`;
@@ -244,6 +315,43 @@ function updateAudioSettingsUI() {
   if (els.gateFloorValue) els.gateFloorValue.textContent = `${audioSettings.gateFloor} dB`;
   if (els.compressorToggle) els.compressorToggle.checked = audioSettings.compressor;
   if (els.advancedAudioToggle) els.advancedAudioToggle.checked = audioSettings.advanced;
+}
+
+async function updateDeviceLists() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  if (els.micSelect) {
+    els.micSelect.innerHTML = '';
+    devices.filter((d) => d.kind === 'audioinput').forEach((device) => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.textContent = device.label || `Mikrofon ${els.micSelect.length + 1}`;
+      els.micSelect.appendChild(option);
+    });
+    if (deviceSettings.micId) els.micSelect.value = deviceSettings.micId;
+  }
+  if (els.outputSelect) {
+    els.outputSelect.innerHTML = '';
+    devices.filter((d) => d.kind === 'audiooutput').forEach((device) => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.textContent = device.label || `Hoparlör ${els.outputSelect.length + 1}`;
+      els.outputSelect.appendChild(option);
+    });
+    if (deviceSettings.outputId) els.outputSelect.value = deviceSettings.outputId;
+  }
+}
+
+async function applyOutputDevice(deviceId) {
+  if (!deviceId || !HTMLMediaElement.prototype.setSinkId) return;
+  const audioEls = Array.from(document.querySelectorAll('audio')).concat(els.screenVideo ? [els.screenVideo] : []);
+  for (const el of audioEls) {
+    try {
+      await el.setSinkId(deviceId);
+    } catch (_) {
+      // ignore unsupported sink errors
+    }
+  }
 }
 
 async function ensureAudioContext() {
@@ -421,6 +529,162 @@ function startMicLoop() {
   requestAnimationFrame(loop);
 }
 
+function openMicTestModal() {
+  if (!els.micTestModal) return;
+  els.micTestModal.classList.remove('hidden');
+}
+
+function closeMicTestModal() {
+  if (!els.micTestModal) return;
+  els.micTestModal.classList.add('hidden');
+  stopMicTest();
+}
+
+function startMicTest() {
+  if (!els.micLoopback) return;
+  const stream = getActiveMicStream();
+  if (!stream) {
+    setStatus('Mikrofon akışı bulunamadı.');
+    return;
+  }
+  if (!audioCtx) return;
+  micTestStream = stream;
+  els.micLoopback.srcObject = stream;
+  if (deviceSettings.outputId && els.micLoopback.setSinkId) {
+    els.micLoopback.setSinkId(deviceSettings.outputId).catch(() => {});
+  }
+  if (!audioCtx) return;
+  micTestAnalyser = audioCtx.createAnalyser();
+  micTestAnalyser.fftSize = 512;
+  micTestData = new Uint8Array(micTestAnalyser.fftSize);
+  const source = audioCtx.createMediaStreamSource(stream);
+  source.connect(micTestAnalyser);
+  micTestLoopRunning = true;
+  const loop = () => {
+    if (!micTestLoopRunning) return;
+    micTestAnalyser.getByteTimeDomainData(micTestData);
+    let sum = 0;
+    for (let i = 0; i < micTestData.length; i += 1) {
+      const v = (micTestData[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / micTestData.length);
+    const db = 20 * Math.log10(rms + 1e-9);
+    const normalized = Math.max(0, Math.min(100, ((db + 60) / 50) * 100));
+    if (els.micTestVuFill) els.micTestVuFill.style.width = `${normalized}%`;
+    if (els.micTestDb) els.micTestDb.textContent = `${db.toFixed(0)} dB`;
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+
+function stopMicTest() {
+  micTestLoopRunning = false;
+  if (els.micLoopback) els.micLoopback.srcObject = null;
+  if (els.micTestVuFill) els.micTestVuFill.style.width = '0%';
+  if (els.micTestDb) els.micTestDb.textContent = '- dB';
+}
+
+async function runEchoTest() {
+  if (!audioCtx) return;
+  if (!els.echoResult) return;
+  els.echoResult.textContent = 'Ölçülüyor...';
+  const stream = getActiveMicStream();
+  if (!stream) {
+    els.echoResult.textContent = 'Mikrofon yok';
+    return;
+  }
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  const data = new Uint8Array(analyser.fftSize);
+  const source = audioCtx.createMediaStreamSource(stream);
+  source.connect(analyser);
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.3;
+  osc.frequency.value = 880;
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  const startAt = performance.now();
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.15);
+
+  let detected = false;
+  const detectLoop = () => {
+    analyser.getByteTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i += 1) {
+      const v = (data[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / data.length);
+    const db = 20 * Math.log10(rms + 1e-9);
+    if (db > -35) {
+      detected = true;
+      const ms = Math.round(performance.now() - startAt);
+      els.echoResult.textContent = `${ms} ms`;
+      return;
+    }
+    if (performance.now() - startAt < 2000) {
+      requestAnimationFrame(detectLoop);
+    } else if (!detected) {
+      els.echoResult.textContent = 'Algılanamadı';
+    }
+  };
+  requestAnimationFrame(detectLoop);
+}
+
+function startStatsLoop() {
+  if (statsIntervalId) return;
+  statsIntervalId = setInterval(async () => {
+    if (peers.size === 0) return;
+    let outBytes = 0;
+    let inBytes = 0;
+    let jitter = 0;
+    let loss = 0;
+    let reports = 0;
+    for (const [peerId, info] of peers.entries()) {
+      const stats = await info.pc.getStats();
+      stats.forEach((report) => {
+        if (report.type === 'outbound-rtp' && report.kind === 'audio') {
+          outBytes += report.bytesSent || 0;
+        }
+        if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+          inBytes += report.bytesReceived || 0;
+          jitter += report.jitter || 0;
+          loss += report.packetsLost || 0;
+          reports += 1;
+        }
+      });
+    }
+    const now = Date.now();
+    if (!lastStatsSample) {
+      lastStatsSample = { outBytes, inBytes, now, loss };
+      return;
+    }
+    const dt = (now - lastStatsSample.now) / 1000;
+    const outRate = dt > 0 ? ((outBytes - lastStatsSample.outBytes) * 8) / 1000 / dt : 0;
+    const inRate = dt > 0 ? ((inBytes - lastStatsSample.inBytes) * 8) / 1000 / dt : 0;
+    const jitterAvg = reports ? (jitter / reports) * 1000 : 0;
+    const lossDiff = Math.max(0, loss - lastStatsSample.loss);
+    if (els.statOut) els.statOut.textContent = `${outRate.toFixed(0)} kbps`;
+    if (els.statIn) els.statIn.textContent = `${inRate.toFixed(0)} kbps`;
+    if (els.statJitter) els.statJitter.textContent = `${jitterAvg.toFixed(0)} ms`;
+    if (els.statLoss) els.statLoss.textContent = `${lossDiff}`;
+    lastStatsSample = { outBytes, inBytes, now, loss };
+  }, 1500);
+}
+
+function stopStatsLoop() {
+  if (statsIntervalId) {
+    clearInterval(statsIntervalId);
+    statsIntervalId = null;
+  }
+  lastStatsSample = null;
+}
+
 function ensureAudioNodes({ resetSource = false } = {}) {
   if (!audioCtx || !rawMicStream) return;
   if (!audioSourceNode || resetSource) {
@@ -545,6 +809,38 @@ function updateStatusBar() {
   }
 }
 
+function updateModerationTargets() {
+  if (!els.moderationTarget) return;
+  els.moderationTarget.innerHTML = '';
+  const options = Array.from(participants.entries())
+    .filter(([id]) => !socket || id !== socket.id)
+    .map(([id, nickname]) => ({ id, nickname }));
+  if (options.length === 0) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'Kullanıcı yok';
+    els.moderationTarget.appendChild(empty);
+    return;
+  }
+  options.forEach((user) => {
+    const option = document.createElement('option');
+    option.value = user.id;
+    option.textContent = `${user.nickname} (${user.id.slice(0, 4)})`;
+    els.moderationTarget.appendChild(option);
+  });
+}
+
+function updateModerationUI() {
+  const isHost = socket && currentHostId && socket.id === currentHostId;
+  if (els.muteOtherBtn) els.muteOtherBtn.disabled = !isHost;
+  if (els.unmuteOtherBtn) els.unmuteOtherBtn.disabled = !isHost;
+  if (els.kickBtn) els.kickBtn.disabled = !isHost;
+  if (els.banBtn) els.banBtn.disabled = !isHost;
+  if (els.slowModeBtn) els.slowModeBtn.disabled = !isHost;
+  if (els.moderationTarget) els.moderationTarget.disabled = !isHost;
+  if (els.slowModeSelect) els.slowModeSelect.disabled = !isHost;
+}
+
 function setScreenStatusText(text) {
   if (!els.screenStatus) return;
   els.screenStatus.textContent = text;
@@ -554,6 +850,9 @@ function setScreenVideoStream(stream, ownerId) {
   if (!els.screenVideo) return;
   els.screenVideo.srcObject = stream || null;
   activeScreenPeerId = stream ? ownerId : null;
+  if (deviceSettings.outputId && els.screenVideo.setSinkId) {
+    els.screenVideo.setSinkId(deviceSettings.outputId).catch(() => {});
+  }
   updateFullscreenButton();
 }
 
@@ -668,18 +967,22 @@ function randomRoomId() {
 }
 
 function getAudioConstraints() {
+  const audioConstraints = {
+    echoCancellation: noiseEnabled,
+    noiseSuppression: noiseEnabled,
+    autoGainControl: agcEnabled
+  };
+  if (deviceSettings.micId) {
+    audioConstraints.deviceId = { exact: deviceSettings.micId };
+  }
   return {
-    audio: {
-      echoCancellation: noiseEnabled,
-      noiseSuppression: noiseEnabled,
-      autoGainControl: noiseEnabled
-    }
+    audio: audioConstraints
   };
 }
 
 function applyMuteToTrack(track) {
   if (!track) return;
-  track.enabled = !isMuted;
+  track.enabled = !isMuted && !listenOnly;
 }
 
 async function ensureLocalStream({ forceNew = false } = {}) {
@@ -803,6 +1106,7 @@ async function startScreenShare() {
     setScreenVideoStream(screenStream, socket ? socket.id : 'local');
     setScreenStatusText(t.screenShareStarted);
     setStatus(t.screenShareStarted);
+    showToast('Ekran paylaşımı başladı', 'success');
     peers.forEach((_info, peerId) => attachScreenTrackToPeer(peerId));
   } catch (err) {
     if (err && err.name === 'NotAllowedError') {
@@ -841,6 +1145,9 @@ function createAudioElement(peerId) {
   audio.playsInline = true;
   audio.dataset.peerId = peerId;
   audioContainer.appendChild(audio);
+  if (deviceSettings.outputId && audio.setSinkId) {
+    audio.setSinkId(deviceSettings.outputId).catch(() => {});
+  }
   return audio;
 }
 
@@ -1055,6 +1362,8 @@ function ensureSocket() {
     renderParticipants();
     renderAudioControls();
     currentRoomId = null;
+    stopStatsLoop();
+    currentHostId = null;
     setUiState({ inRoom: false });
     isMuted = false;
     updateMuteButton();
@@ -1071,6 +1380,15 @@ function ensureSocket() {
     updateStatusBar();
   });
 
+  if (socket.io) {
+    socket.io.on('reconnect_attempt', (attempt) => {
+      setStatus(`Yeniden bağlanılıyor... (deneme ${attempt})`);
+    });
+    socket.io.on('reconnect_failed', () => {
+      setStatus('Yeniden bağlanma başarısız.');
+    });
+  }
+
   socket.on('rooms-list', (rooms = []) => {
     renderRoomsList(rooms);
   });
@@ -1079,12 +1397,13 @@ function ensureSocket() {
     renderRoomsList(rooms);
   });
 
-  socket.on('users-in-room', ({ roomId, users } = {}) => {
+  socket.on('users-in-room', ({ roomId, users, hostId } = {}) => {
     if (!roomId) {
       setStatus('Oda ID gerekli.');
       return;
     }
     currentRoomId = roomId;
+    currentHostId = hostId || null;
     manualLeave = false;
     setUiState({ inRoom: true });
     participants.clear();
@@ -1097,6 +1416,8 @@ function ensureSocket() {
     });
     renderParticipants();
     renderAudioControls();
+    updateModerationTargets();
+    updateModerationUI();
     clearChat();
     setStatus([`Odaya katılındı: ${currentRoomId}`, `Katılımcı: ${participants.size}`]);
     log(`Odaya katılındı: ${currentRoomId}`);
@@ -1105,15 +1426,18 @@ function ensureSocket() {
     peersInRoom.forEach((peer) => {
       createPeerConnection(peer.id, true);
     });
+    startStatsLoop();
   });
 
   socket.on('user-joined', ({ id, nickname } = {}) => {
     if (!id) return;
     participants.set(id, nickname || id);
     renderParticipants();
+    updateModerationTargets();
     createPeerConnection(id, false);
     setStatus([`Yeni katılımcı: ${nickname || id}`, `Oda: ${currentRoomId || '-'}`]);
     log(`Yeni katılımcı: ${nickname || id}`);
+    showToast(`${nickname || id} odaya katıldı`, 'success');
   });
 
   socket.on('user-left', ({ id } = {}) => {
@@ -1122,8 +1446,55 @@ function ensureSocket() {
     participants.delete(id);
     renderParticipants();
     renderAudioControls();
+    updateModerationTargets();
     setStatus([`Kullanıcı ayrıldı: ${id}`, `Oda: ${currentRoomId || '-'}`]);
     log(`Kullanıcı ayrıldı: ${id}`);
+    showToast(`${id} odadan çıktı`, 'warn');
+  });
+
+  socket.on('host-changed', ({ hostId } = {}) => {
+    currentHostId = hostId || null;
+    updateModerationUI();
+  });
+
+  socket.on('join-denied', ({ reason } = {}) => {
+    setStatus(reason || 'Odaya katılma reddedildi.');
+    showToast(reason || 'Odaya katılma reddedildi.', 'warn');
+    leaveRoom();
+  });
+
+  socket.on('kicked', ({ reason } = {}) => {
+    showToast(reason || 'Odadan çıkarıldın.', 'warn');
+    leaveRoom();
+  });
+
+  socket.on('banned', ({ reason } = {}) => {
+    showToast(reason || 'Odadan yasaklandın.', 'warn');
+    leaveRoom();
+  });
+
+  socket.on('force-mute', ({ reason } = {}) => {
+    isMuted = true;
+    applyMuteToTrack(currentMicTrack);
+    updateMuteButton();
+    updateStatusBar();
+    showToast(reason || 'Mikrofon sessize alındı.', 'warn');
+  });
+
+  socket.on('force-unmute', ({ reason } = {}) => {
+    isMuted = false;
+    applyMuteToTrack(currentMicTrack);
+    updateMuteButton();
+    updateStatusBar();
+    showToast(reason || 'Mikrofon açıldı.', 'success');
+  });
+
+  socket.on('slowmode-warn', ({ ms } = {}) => {
+    showToast(`Slow mode aktif (${ms}ms).`, 'warn');
+  });
+
+  socket.on('slowmode-updated', ({ ms } = {}) => {
+    showToast(`Slow mode ${ms ? `${ms}ms` : 'kapalı'}.`, 'success');
   });
 
   socket.on('chat-message', (payload) => {
@@ -1225,6 +1596,7 @@ function createPeerConnection(peerId, shouldCreateOffer) {
       const videoStream = stream || new MediaStream([event.track]);
       setScreenVideoStream(videoStream, peerId);
       setScreenStatusText(`Ekran paylaşımı: ${participants.get(peerId) || peerId}`);
+      showToast(`${participants.get(peerId) || peerId} ekran paylaşımı başlattı`, 'success');
       event.track.onended = () => {
         if (activeScreenPeerId === peerId) {
           clearScreenVideo(t.screenShareEnded);
@@ -1319,6 +1691,7 @@ function leaveRoom() {
   pendingJoin = null;
   if (isScreenSharing) stopScreenShare('manual');
   cleanupAllPeers();
+  stopStatsLoop();
 
   if (localStream) {
     localStream.getTracks().forEach((track) => track.stop());
@@ -1417,6 +1790,55 @@ if (els.noiseToggle) {
   });
 }
 
+if (els.agcToggle) {
+  els.agcToggle.addEventListener('change', async (event) => {
+    agcEnabled = Boolean(event.target.checked);
+    if (currentRoomId) {
+      await ensureLocalStream({ forceNew: true });
+      log(`AGC ${agcEnabled ? 'açıldı' : 'kapandı'}.`);
+    }
+  });
+}
+
+if (els.listenOnlyToggle) {
+  els.listenOnlyToggle.addEventListener('change', () => {
+    listenOnly = Boolean(els.listenOnlyToggle.checked);
+    applyMuteToTrack(currentMicTrack);
+    setupMicForAllPeers();
+    updateStatusBar();
+    showToast(listenOnly ? 'Listen-only aktif.' : 'Listen-only kapalı.', 'success');
+  });
+}
+
+if (els.deafToggle) {
+  els.deafToggle.addEventListener('change', () => {
+    isDeaf = Boolean(els.deafToggle.checked);
+    isSpeakerMuted = isDeaf;
+    updateSpeakerButton();
+    Array.from(peers.keys()).forEach(applyRemoteAudioSettings);
+    updateStatusBar();
+    showToast(isDeaf ? 'Deaf aktif.' : 'Deaf kapalı.', 'success');
+  });
+}
+
+if (els.micSelect) {
+  els.micSelect.addEventListener('change', async () => {
+    deviceSettings.micId = els.micSelect.value;
+    saveDeviceSettings();
+    if (currentRoomId) {
+      await ensureLocalStream({ forceNew: true });
+    }
+  });
+}
+
+if (els.outputSelect) {
+  els.outputSelect.addEventListener('change', async () => {
+    deviceSettings.outputId = els.outputSelect.value;
+    saveDeviceSettings();
+    await applyOutputDevice(deviceSettings.outputId);
+  });
+}
+
   if (els.advancedAudioToggle) {
     els.advancedAudioToggle.addEventListener('change', async (event) => {
       audioSettings.advanced = Boolean(event.target.checked);
@@ -1501,6 +1923,39 @@ if (els.screenShareBtn) {
   });
 }
 
+if (els.micTestBtn) {
+  els.micTestBtn.addEventListener('click', async () => {
+    await ensureAudioContext();
+    openMicTestModal();
+  });
+}
+
+if (els.micTestClose) {
+  els.micTestClose.addEventListener('click', () => {
+    closeMicTestModal();
+  });
+}
+
+if (els.micTestStart) {
+  els.micTestStart.addEventListener('click', async () => {
+    await ensureAudioContext();
+    startMicTest();
+  });
+}
+
+if (els.micTestStop) {
+  els.micTestStop.addEventListener('click', () => {
+    stopMicTest();
+  });
+}
+
+if (els.echoTestBtn) {
+  els.echoTestBtn.addEventListener('click', async () => {
+    await ensureAudioContext();
+    runEchoTest();
+  });
+}
+
 if (els.screenFullscreenBtn) {
   els.screenFullscreenBtn.addEventListener('click', () => {
     toggleFullscreen();
@@ -1514,6 +1969,33 @@ if (els.refreshRoomsBtn) {
   els.refreshRoomsBtn.addEventListener('click', () => {
     const s = ensureSocket();
     if (s && s.connected) s.emit('list-rooms');
+  });
+}
+
+function sendModeration(action) {
+  if (!socket || !currentRoomId || !els.moderationTarget) return;
+  const targetId = els.moderationTarget.value;
+  if (!targetId) return;
+  socket.emit('moderation-action', { roomId: currentRoomId, action, targetId });
+}
+
+if (els.muteOtherBtn) {
+  els.muteOtherBtn.addEventListener('click', () => sendModeration('mute'));
+}
+if (els.unmuteOtherBtn) {
+  els.unmuteOtherBtn.addEventListener('click', () => sendModeration('unmute'));
+}
+if (els.kickBtn) {
+  els.kickBtn.addEventListener('click', () => sendModeration('kick'));
+}
+if (els.banBtn) {
+  els.banBtn.addEventListener('click', () => sendModeration('ban'));
+}
+if (els.slowModeBtn) {
+  els.slowModeBtn.addEventListener('click', () => {
+    if (!socket || !currentRoomId || !els.slowModeSelect) return;
+    const slowModeMs = Number(els.slowModeSelect.value);
+    socket.emit('moderation-action', { roomId: currentRoomId, action: 'slowmode', slowModeMs });
   });
 }
 
@@ -1532,7 +2014,9 @@ if (els.chatInput) {
 
 setText();
 loadAudioSettings();
+loadDeviceSettings();
 updateAudioSettingsUI();
+if (els.agcToggle) els.agcToggle.checked = agcEnabled;
 setUiState({ inRoom: false });
 setStatus('Hazır. Oda ID girip katılabilirsin.');
 log('Hazır.');
@@ -1543,6 +2027,15 @@ updateScreenShareButton();
 updateFullscreenButton();
 updateStatusBar();
 setScreenStatusText(t.screenShareEmpty);
+updateDeviceLists();
+if (deviceSettings.outputId) {
+  applyOutputDevice(deviceSettings.outputId);
+}
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+  navigator.mediaDevices.addEventListener('devicechange', () => {
+    updateDeviceLists();
+  });
+}
 
 const storedNickname = localStorage.getItem('voice-nickname');
 if (els.nicknameInput) {
@@ -1563,6 +2056,15 @@ if (els.nicknameInput) {
 if (els.serverUrlInput) {
   els.serverUrlInput.addEventListener('input', () => {
     updateServerUrlDisplay();
+  });
+}
+
+if (els.modeSelect) {
+  els.modeSelect.addEventListener('change', () => {
+    if (els.modeSelect.value === 'sfu') {
+      showToast('SFU desteği yakında. Şimdilik mesh kullanılıyor.', 'warn');
+      els.modeSelect.value = 'mesh';
+    }
   });
 }
 
