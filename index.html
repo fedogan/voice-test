@@ -201,81 +201,101 @@
               <ul id="usersList" class="users"></ul>
             </div>
 
-            <div class="status logPanel">
-              <div class="statusTitle" data-i18n="logTitle">Log</div>
-              <pre id="log" class="logText"></pre>
-            </div>
+            
           </div>
         </section>
 
         <div class="rightColumn">
-          <section class="card column chatCard">
-            <div class="cardTitle" data-i18n="chatTitle">Sohbet</div>
-            <div id="chatMessages" class="chatMessages"></div>
-            <div class="chatInputRow">
-              <input
-                id="chatInput"
-                class="input"
-                placeholder="Mesaj yaz..."
-                data-i18n-placeholder="chatPlaceholder"
-                autocomplete="off"
-              />
-              <button id="chatSendBtn" class="btn primary" data-i18n="sendBtn" title="Mesaj gönder">
-                Gönder
-              </button>
-            </div>
-          </section>
+          <div class="tabBar">
+            <button class="tabBtn active" data-tab="chat">Sohbet</button>
+            <button class="tabBtn" data-tab="network">Ağ</button>
+            <button class="tabBtn" data-tab="controls">Kontroller</button>
+            <button class="tabBtn" data-tab="log">Log</button>
+          </div>
 
-          <section class="card column statsCard">
-            <div class="cardTitle">Ağ İstatistikleri</div>
-            <div class="statsGrid">
-              <div class="statItem"><span>Outbound</span><strong id="statOut">-</strong></div>
-              <div class="statItem"><span>Inbound</span><strong id="statIn">-</strong></div>
-              <div class="statItem"><span>Jitter</span><strong id="statJitter">-</strong></div>
-              <div class="statItem"><span>Loss</span><strong id="statLoss">-</strong></div>
-            </div>
-          </section>
-
-          <section class="card column audioCardPanel audioControls">
-            <div class="cardTitle" data-i18n="audioTitle">Ses Kontrolleri</div>
-            <button id="speakerBtn" class="btn" data-i18n="speakerOn" title="Tüm uzak sesleri kapat/aç">
-              Sesi Kapat
-            </button>
-            <div id="audioList" class="audioList"></div>
-
-            <div class="cardTitle secondary" data-i18n="screenShareTitle">Ekran Paylaşımı</div>
-            <div class="screenContainer">
-              <video id="screenVideo" autoplay playsinline muted></video>
-              <button id="screenFullscreenBtn" class="btn small" data-i18n="fullscreenEnter" title="Tam ekrana al">
-                Tam Ekran
-              </button>
-              <div id="screenStatus" class="mutedText" data-i18n="screenShareEmpty">
-                Ekran paylaşımı yok.
+          <div class="tabContent">
+            <section class="card column chatCard tabPane active" data-tab="chat">
+              <div class="cardTitle" data-i18n="chatTitle">Sohbet</div>
+              <div id="chatMessages" class="chatMessages"></div>
+              <div class="chatInputRow">
+                <input
+                  id="chatInput"
+                  class="input"
+                  placeholder="Mesaj yaz..."
+                  data-i18n-placeholder="chatPlaceholder"
+                  autocomplete="off"
+                />
+                <button id="chatSendBtn" class="btn primary" data-i18n="sendBtn" title="Mesaj gönder">
+                  Gönder
+                </button>
               </div>
-            </div>
+            </section>
 
-            <div class="cardTitle secondary">Moderasyon</div>
-            <div class="row">
-              <label class="label" for="moderationTarget">Kullanıcı</label>
-              <select id="moderationTarget" class="input"></select>
-            </div>
-            <div class="row buttons">
-              <button id="muteOtherBtn" class="btn">Sessize al</button>
-              <button id="unmuteOtherBtn" class="btn">Sesi aç</button>
-              <button id="kickBtn" class="btn danger">Kick</button>
-              <button id="banBtn" class="btn danger">Ban</button>
-            </div>
-            <div class="row">
-              <label class="label" for="slowModeSelect">Slow mode</label>
-              <select id="slowModeSelect" class="input">
-                <option value="0">Kapalı</option>
-                <option value="2000">2 sn</option>
-                <option value="5000">5 sn</option>
-                <option value="10000">10 sn</option>
-              </select>
-              <button id="slowModeBtn" class="btn">Uygula</button>
-            </div>
-          </section>
+            <section class="card column statsCard tabPane" data-tab="network">
+              <div class="cardTitle">Ağ İstatistikleri</div>
+              <div class="statsGrid">
+                <div class="statItem"><span>Outbound</span><strong id="statOut">-</strong></div>
+                <div class="statItem"><span>Inbound</span><strong id="statIn">-</strong></div>
+                <div class="statItem"><span>Jitter</span><strong id="statJitter">-</strong></div>
+                <div class="statItem"><span>Loss</span><strong id="statLoss">-</strong></div>
+                <div class="statItem"><span>RTT</span><strong id="statRtt">-</strong></div>
+              </div>
+            </section>
+
+            <section class="card column audioCardPanel tabPane" data-tab="controls">
+              <div class="cardTitle" data-i18n="audioTitle">Ses Kontrolleri</div>
+              <button id="speakerBtn" class="btn" data-i18n="speakerOn" title="Tüm uzak sesleri kapat/aç">
+                Sesi Kapat
+              </button>
+              <div id="audioList" class="audioList"></div>
+
+              <div class="cardTitle secondary" data-i18n="screenShareTitle">Ekran Paylaşımı</div>
+              <div class="screenContainer">
+                <video id="screenVideo" autoplay playsinline muted></video>
+                <button id="screenFullscreenBtn" class="btn small" data-i18n="fullscreenEnter" title="Tam ekrana al">
+                  Tam Ekran
+                </button>
+                <div id="screenStatus" class="mutedText" data-i18n="screenShareEmpty">
+                  Ekran paylaşımı yok.
+                </div>
+              </div>
+
+              <div id="moderationPanel" class="accordion">
+                <button id="moderationToggle" class="accordionHeader">Moderasyon</button>
+                <div class="accordionBody">
+                  <div class="row">
+                    <label class="label" for="moderationTarget">Kullanıcı</label>
+                    <select id="moderationTarget" class="input"></select>
+                  </div>
+                  <div class="row buttons">
+                    <button id="muteOtherBtn" class="btn">Sessize al</button>
+                    <button id="unmuteOtherBtn" class="btn">Sesi aç</button>
+                    <button id="kickBtn" class="btn danger">Kick</button>
+                    <button id="banBtn" class="btn danger">Ban</button>
+                  </div>
+                  <div class="row">
+                    <label class="label" for="slowModeSelect">Slow mode</label>
+                    <select id="slowModeSelect" class="input">
+                      <option value="0">Kapalı</option>
+                      <option value="2000">2 sn</option>
+                      <option value="5000">5 sn</option>
+                      <option value="10000">10 sn</option>
+                    </select>
+                    <button id="slowModeBtn" class="btn">Uygula</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card column logCard tabPane" data-tab="log">
+              <div class="cardTitle" data-i18n="logTitle">Log</div>
+              <div class="row buttons">
+                <button id="logCopyBtn" class="btn">Kopyala</button>
+                <button id="logClearBtn" class="btn danger">Temizle</button>
+              </div>
+              <pre id="log" class="logText logFull"></pre>
+            </section>
+          </div>
         </div>
       </div>
 

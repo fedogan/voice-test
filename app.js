@@ -114,6 +114,7 @@ const els = {
   statIn: document.getElementById('statIn'),
   statJitter: document.getElementById('statJitter'),
   statLoss: document.getElementById('statLoss'),
+  statRtt: document.getElementById('statRtt'),
   moderationTarget: document.getElementById('moderationTarget'),
   muteOtherBtn: document.getElementById('muteOtherBtn'),
   unmuteOtherBtn: document.getElementById('unmuteOtherBtn'),
@@ -121,6 +122,10 @@ const els = {
   banBtn: document.getElementById('banBtn'),
   slowModeSelect: document.getElementById('slowModeSelect'),
   slowModeBtn: document.getElementById('slowModeBtn'),
+  moderationPanel: document.getElementById('moderationPanel'),
+  moderationToggle: document.getElementById('moderationToggle'),
+  logCopyBtn: document.getElementById('logCopyBtn'),
+  logClearBtn: document.getElementById('logClearBtn'),
   toastContainer: document.getElementById('toastContainer'),
   advancedAudioToggle: document.getElementById('advancedAudioToggle'),
   highPassFreq: document.getElementById('highPassFreq'),
@@ -183,6 +188,7 @@ let processedTrack = null;
 
 const AUDIO_SETTINGS_KEY = 'voice-advanced-audio';
 const DEVICE_SETTINGS_KEY = 'voice-devices';
+const TAB_SETTINGS_KEY = 'voice-right-tab';
 const audioSettings = {
   gateThreshold: -40,
   gateAttack: 5,
@@ -221,6 +227,7 @@ let micTestData = null;
 let micTestLoopRunning = false;
 let statsIntervalId = null;
 let lastStatsSample = null;
+let activeTab = 'chat';
 
 const audioContainer = document.createElement('div');
 audioContainer.style.display = 'none';
@@ -673,6 +680,12 @@ function startStatsLoop() {
     if (els.statIn) els.statIn.textContent = `${inRate.toFixed(0)} kbps`;
     if (els.statJitter) els.statJitter.textContent = `${jitterAvg.toFixed(0)} ms`;
     if (els.statLoss) els.statLoss.textContent = `${lossDiff}`;
+    if (els.statRtt) {
+      const rtt = socket && socket.io && typeof socket.io.engine?.ping === 'number'
+        ? `${Math.round(socket.io.engine.ping)} ms`
+        : '-';
+      els.statRtt.textContent = rtt;
+    }
     lastStatsSample = { outBytes, inBytes, now, loss };
   }, 1500);
 }
@@ -839,6 +852,31 @@ function updateModerationUI() {
   if (els.slowModeBtn) els.slowModeBtn.disabled = !isHost;
   if (els.moderationTarget) els.moderationTarget.disabled = !isHost;
   if (els.slowModeSelect) els.slowModeSelect.disabled = !isHost;
+  if (els.moderationPanel) {
+    els.moderationPanel.style.display = isHost ? 'block' : 'none';
+  }
+}
+
+function setActiveTab(tabName) {
+  activeTab = tabName;
+  const tabs = document.querySelectorAll('.tabBtn');
+  const panes = document.querySelectorAll('.tabPane');
+  tabs.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  panes.forEach((pane) => {
+    pane.classList.toggle('active', pane.dataset.tab === tabName);
+  });
+  localStorage.setItem(TAB_SETTINGS_KEY, tabName);
+}
+
+function initTabs() {
+  const saved = localStorage.getItem(TAB_SETTINGS_KEY);
+  if (saved) setActiveTab(saved);
+  const tabs = document.querySelectorAll('.tabBtn');
+  tabs.forEach((btn) => {
+    btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
+  });
 }
 
 function setScreenStatusText(text) {
@@ -2003,6 +2041,33 @@ if (els.chatSendBtn) {
   els.chatSendBtn.addEventListener('click', handleChatSubmit);
 }
 
+if (els.logCopyBtn) {
+  els.logCopyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(logLines.join('\n'));
+      showToast('Log kopyalandı', 'success');
+    } catch (err) {
+      showToast('Log kopyalanamadı', 'warn');
+    }
+  });
+}
+
+if (els.logClearBtn) {
+  els.logClearBtn.addEventListener('click', () => {
+    logLines.length = 0;
+    if (els.log) els.log.textContent = '';
+    showToast('Log temizlendi', 'success');
+  });
+}
+
+if (els.moderationToggle) {
+  els.moderationToggle.addEventListener('click', () => {
+    if (els.moderationPanel) {
+      els.moderationPanel.classList.toggle('open');
+    }
+  });
+}
+
 if (els.chatInput) {
   els.chatInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
@@ -2031,6 +2096,7 @@ updateDeviceLists();
 if (deviceSettings.outputId) {
   applyOutputDevice(deviceSettings.outputId);
 }
+initTabs();
 if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
   navigator.mediaDevices.addEventListener('devicechange', () => {
     updateDeviceLists();

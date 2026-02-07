@@ -123,6 +123,50 @@ body {
   height: 100%;
 }
 
+.tabBar {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+}
+
+.tabBtn {
+  flex: 1;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  font-size: 12px;
+}
+
+.tabBtn.active {
+  background: rgba(91, 124, 250, 0.2);
+  color: var(--text);
+}
+
+.tabContent {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+}
+
+.tabPane {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tabPane.active {
+  display: flex;
+}
+
 .mainScroll {
   display: grid;
   gap: 14px;
@@ -348,7 +392,7 @@ select.input {
   display: grid;
   gap: 10px;
   overflow: auto;
-  flex: 1;
+  max-height: 360px;
   padding-right: 4px;
 }
 
@@ -422,10 +466,54 @@ select.input {
   gap: 10px;
   align-items: center;
   margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  padding-top: 10px;
+  background: rgba(2, 6, 23, 0.6);
+  backdrop-filter: blur(10px);
 }
 
 /* audio */
 .audioCardPanel {
+  gap: 12px;
+}
+
+.logCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.logFull {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.accordion {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.accordionHeader {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  background: rgba(2, 6, 23, 0.5);
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.accordionBody {
+  display: none;
+  padding: 12px;
+  background: rgba(2, 6, 23, 0.35);
+}
+
+.accordion.open .accordionBody {
+  display: grid;
   gap: 12px;
 }
 
