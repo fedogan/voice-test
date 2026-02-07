@@ -1329,6 +1329,7 @@ function leaveRoom() {
   processedStream = null;
   processedTrack = null;
   currentMicTrack = null;
+  setVuLevel(0, null);
 
   if (socket) {
     socket.disconnect();
