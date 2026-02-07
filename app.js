@@ -4,12 +4,12 @@ const t = {
   subtitle: 'Minimal signaling demo',
   roomsTitle: 'Odalar',
   refreshRooms: 'Yenile',
-  roomIdLabel: 'Oda ID',
-  roomIdPlaceholder: 'örn: abc123',
+  roomIdLabel: 'Oda İsmi',
+  roomIdPlaceholder: 'örn: LoL odası',
   nicknameLabel: 'Takma ad',
-  nicknamePlaceholder: 'örn: Kullanıcı1234',
-  serverUrlLabel: 'Signaling Server URL',
-  serverUrlPlaceholder: 'örn: https://your-signal-server.com',
+  nicknamePlaceholder: 'örn: Caryx',
+  serverUrlLabel: 'Signaling Server URL (bunla işin yok %99 ihtimalle)',
+  serverUrlPlaceholder: 'örn: ?server=https://diye-olan-bi-link.com',
   noiseToggle: 'Gürültü azaltma',
   joinBtn: 'Katıl',
   createBtn: 'Oda oluştur',
@@ -38,7 +38,7 @@ const t = {
   screenShareUnsupported: 'Bu cihazda ekran paylaşımı desteklenmiyor.',
   screenShareError: 'Ekran paylaşımı başlatılamadı.',
   screenShareEnded: 'Ekran paylaşımı bitti.',
-  advancedAudioToggle: 'Gelişmiş Gürültü Azaltma',
+  advancedAudioToggle: 'Gelişmiş Gürültü Azaltma (Bu ayarları denemek için koydum güzel değerler bulunca kaldıracağım)',
   highPassLabel: 'High-pass (Hz)',
   compressorToggle: 'Compressor',
   gateThresholdLabel: 'Gate Threshold (dB)',
@@ -88,6 +88,10 @@ const els = {
   screenVideo: document.getElementById('screenVideo'),
   screenStatus: document.getElementById('screenStatus'),
   screenFullscreenBtn: document.getElementById('screenFullscreenBtn'),
+  statusConn: document.getElementById('statusConn'),
+  statusPing: document.getElementById('statusPing'),
+  statusMic: document.getElementById('statusMic'),
+  statusScreen: document.getElementById('statusScreen'),
   advancedAudioToggle: document.getElementById('advancedAudioToggle'),
   highPassFreq: document.getElementById('highPassFreq'),
   highPassValue: document.getElementById('highPassValue'),
@@ -326,6 +330,7 @@ async function updateProcessedTrack() {
     currentMicTrack = rawMicTrack;
     applyMuteToTrack(currentMicTrack);
     setupMicForAllPeers();
+    updateStatusBar();
     return;
   }
   try {
@@ -335,10 +340,12 @@ async function updateProcessedTrack() {
     currentMicTrack = processedTrack || rawMicTrack;
     applyMuteToTrack(currentMicTrack);
     setupMicForAllPeers();
+    updateStatusBar();
   } catch (err) {
     currentMicTrack = rawMicTrack;
     applyMuteToTrack(currentMicTrack);
     setupMicForAllPeers();
+    updateStatusBar();
     setStatus(t.advancedAudioError);
     log(`Gelişmiş gürültü azaltma hatası: ${err.message || err}`);
   }
@@ -357,6 +364,26 @@ function updateSpeakerButton() {
 function updateScreenShareButton() {
   if (!els.screenShareBtn) return;
   els.screenShareBtn.textContent = isScreenSharing ? t.screenShareStop : t.screenShareStart;
+}
+
+function updateStatusBar() {
+  if (els.statusConn) {
+    const connected = socket && socket.connected;
+    els.statusConn.textContent = `Bağlı: ${connected ? 'Evet' : 'Hayır'}`;
+  }
+  if (els.statusPing) {
+    const ping = socket && socket.io && typeof socket.io.engine?.ping === 'number'
+      ? `${Math.round(socket.io.engine.ping)} ms`
+      : '-';
+    els.statusPing.textContent = `Ping: ${ping}`;
+  }
+  if (els.statusMic) {
+    const micState = currentMicTrack && !isMuted ? 'Açık' : 'Sessiz';
+    els.statusMic.textContent = `Mikrofon: ${micState}`;
+  }
+  if (els.statusScreen) {
+    els.statusScreen.textContent = `Ekran: ${isScreenSharing ? 'Açık' : 'Kapalı'}`;
+  }
 }
 
 function setScreenStatusText(text) {
@@ -458,6 +485,9 @@ function renderRoomsList(rooms) {
   list.forEach((room) => {
     const item = document.createElement('div');
     item.className = 'roomItem';
+    if (currentRoomId && room.roomId === currentRoomId) {
+      item.classList.add('active');
+    }
     const name = document.createElement('div');
     name.className = 'roomName';
     name.textContent = room.roomId;
@@ -610,6 +640,7 @@ async function startScreenShare() {
     screenTrack.onended = () => stopScreenShare('ended');
     isScreenSharing = true;
     updateScreenShareButton();
+    updateStatusBar();
     setScreenVideoStream(screenStream, socket ? socket.id : 'local');
     setScreenStatusText(t.screenShareStarted);
     setStatus(t.screenShareStarted);
@@ -631,6 +662,7 @@ function stopScreenShare(reason) {
   screenTrack = null;
   isScreenSharing = false;
   updateScreenShareButton();
+  updateStatusBar();
   if (activeScreenPeerId === (socket && socket.id)) {
     clearScreenVideo(t.screenShareStopped);
   }
@@ -837,6 +869,7 @@ function ensureSocket() {
     updateServerUrlDisplay();
     log(`Socket bağlandı: ${socket.id}`);
     setStatus('Bağlandı.');
+    updateStatusBar();
     socket.emit('list-rooms');
     if (pendingJoin) {
       socket.emit('join-room', pendingJoin);
@@ -845,6 +878,7 @@ function ensureSocket() {
 
   socket.on('disconnect', () => {
     const wasInRoom = Boolean(currentRoomId);
+    updateStatusBar();
     if (isScreenSharing) stopScreenShare('disconnect');
     cleanupAllPeers();
     participants.clear();
@@ -864,6 +898,7 @@ function ensureSocket() {
 
   socket.on('connect_error', (err) => {
     setStatus(`Bağlantı hatası: ${err.message || err}`);
+    updateStatusBar();
   });
 
   socket.on('rooms-list', (rooms = []) => {
@@ -1137,6 +1172,7 @@ function leaveRoom() {
   clearChat();
   setUiState({ inRoom: false });
   updateMuteButton();
+  updateStatusBar();
   setStatus('Odadan çıkıldı.');
   ensureSocket();
 }
@@ -1193,6 +1229,7 @@ els.muteBtn.addEventListener('click', () => {
   applyMuteToTrack(currentMicTrack);
   setupMicForAllPeers();
   updateMuteButton();
+  updateStatusBar();
   setStatus([`Oda: ${currentRoomId || '-'}`, `Mikrofon: ${isMuted ? 'Sessiz' : 'Açık'}`]);
   log(`Mikrofon: ${isMuted ? 'Sessiz' : 'Açık'}`);
 });
@@ -1331,6 +1368,7 @@ updateMuteButton();
 updateSpeakerButton();
 updateScreenShareButton();
 updateFullscreenButton();
+updateStatusBar();
 setScreenStatusText(t.screenShareEmpty);
 
 const storedNickname = localStorage.getItem('voice-nickname');
@@ -1356,3 +1394,6 @@ if (els.serverUrlInput) {
 }
 
 ensureSocket();
+setInterval(() => {
+  updateStatusBar();
+}, 5000);

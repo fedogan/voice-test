@@ -9,15 +9,25 @@
   <body>
     <main class="app">
       <header class="header">
-        <h1>Emrecord discord değil</h1>
-        <p class="subtitle" data-i18n="subtitle">demo sürümü</p>
+        <div class="headerTitle">
+          <h1>Emrecord discord değil</h1>
+          <p class="subtitle" data-i18n="subtitle">demo sürümü</p>
+        </div>
+        <div class="statusBar">
+          <div class="statusPill" id="statusConn">Bağlı: -</div>
+          <div class="statusPill" id="statusPing">Ping: -</div>
+          <div class="statusPill" id="statusMic">Mikrofon: -</div>
+          <div class="statusPill" id="statusScreen">Ekran: -</div>
+        </div>
       </header>
 
       <div class="layout">
         <section class="card column">
           <div class="cardTitle" data-i18n="roomsTitle">Odalar</div>
           <div class="roomsList" id="roomsList"></div>
-          <button id="refreshRoomsBtn" class="btn small" data-i18n="refreshRooms">Yenile</button>
+          <button id="refreshRoomsBtn" class="btn small" data-i18n="refreshRooms" title="Oda listesini yenile">
+            Yenile
+          </button>
         </section>
 
         <section class="card column">
@@ -55,16 +65,18 @@
           </div>
 
           <div class="row toggles">
-            <label class="toggle">
+            <label class="switch">
               <input id="noiseToggle" type="checkbox" checked />
-              <span data-i18n="noiseToggle">Gürültü azaltma (Çalışıyoyla çalışmıyor arasında bi yerde)</span>
+              <span class="switchSlider"></span>
+              <span class="switchLabel" data-i18n="noiseToggle">Gürültü azaltma (Çalışıyoyla çalışmıyor arasında bi yerde)</span>
             </label>
           </div>
 
           <div class="row audioSettings">
-            <label class="toggle">
+            <label class="switch">
               <input id="advancedAudioToggle" type="checkbox" checked />
-              <span data-i18n="advancedAudioToggle">Gelişmiş Gürültü Azaltma</span>
+              <span class="switchSlider"></span>
+              <span class="switchLabel" data-i18n="advancedAudioToggle">Gelişmiş Gürültü Azaltma</span>
             </label>
             <div class="sliderRow">
               <label class="label" for="highPassFreq" data-i18n="highPassLabel">High-pass (Hz)</label>
@@ -72,9 +84,10 @@
             </div>
             <input id="highPassFreq" type="range" min="60" max="200" step="1" value="90" />
 
-            <label class="toggle">
+            <label class="switch">
               <input id="compressorToggle" type="checkbox" />
-              <span data-i18n="compressorToggle">Compressor</span>
+              <span class="switchSlider"></span>
+              <span class="switchLabel" data-i18n="compressorToggle">Compressor</span>
             </label>
 
             <div class="sliderRow">
@@ -103,14 +116,18 @@
           </div>
 
           <div class="row buttons">
-            <button id="joinBtn" class="btn primary" data-i18n="joinBtn">Katıl</button>
-            <button id="createBtn" class="btn" data-i18n="createBtn">Oda oluştur</button>
-            <button id="muteBtn" class="btn" disabled data-i18n="muteBtn">Mikrofon Sessiz</button>
-            <button id="leaveBtn" class="btn danger" disabled data-i18n="leaveBtn">Çık</button>
+            <button id="joinBtn" class="btn primary" data-i18n="joinBtn" title="Odaya katıl">Katıl</button>
+            <button id="createBtn" class="btn" data-i18n="createBtn" title="Yeni oda oluştur">Oda oluştur</button>
+            <button id="muteBtn" class="btn" disabled data-i18n="muteBtn" title="Mikrofonu sessize al">
+              Mikrofon Sessiz
+            </button>
+            <button id="leaveBtn" class="btn danger" disabled data-i18n="leaveBtn" title="Odadan çık">
+              Çık
+            </button>
           </div>
 
           <div class="row">
-            <button id="screenShareBtn" class="btn" disabled data-i18n="screenShareStart">
+            <button id="screenShareBtn" class="btn" disabled data-i18n="screenShareStart" title="Ekran paylaşımını başlat">
               Ekran Paylaş
             </button>
           </div>
@@ -142,17 +159,23 @@
               data-i18n-placeholder="chatPlaceholder"
               autocomplete="off"
             />
-            <button id="chatSendBtn" class="btn primary" data-i18n="sendBtn">Gönder</button>
+            <button id="chatSendBtn" class="btn primary" data-i18n="sendBtn" title="Mesaj gönder">
+              Gönder
+            </button>
           </div>
+        </section>
 
-          <div class="cardTitle secondary" data-i18n="audioTitle">Ses Kontrolleri</div>
-          <button id="speakerBtn" class="btn" data-i18n="speakerOn">Sesi Kapat</button>
+        <section class="card column audioCardPanel">
+          <div class="cardTitle" data-i18n="audioTitle">Ses Kontrolleri</div>
+          <button id="speakerBtn" class="btn" data-i18n="speakerOn" title="Tüm uzak sesleri kapat/aç">
+            Sesi Kapat
+          </button>
           <div id="audioList" class="audioList"></div>
 
           <div class="cardTitle secondary" data-i18n="screenShareTitle">Ekran Paylaşımı</div>
           <div class="screenContainer">
             <video id="screenVideo" autoplay playsinline muted></video>
-            <button id="screenFullscreenBtn" class="btn small" data-i18n="fullscreenEnter">
+            <button id="screenFullscreenBtn" class="btn small" data-i18n="fullscreenEnter" title="Tam ekrana al">
               Tam Ekran
             </button>
             <div id="screenStatus" class="mutedText" data-i18n="screenShareEmpty">
