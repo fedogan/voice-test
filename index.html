@@ -73,7 +73,6 @@
             <div class="centerControls">
               <button id="muteBtn" class="btn primary micBtn" disabled data-i18n="muteBtn">Mikrofon</button>
               <div class="row">
-                <button id="screenShareBtn" class="btn" disabled data-i18n="screenShareStart">Ekran Paylaş</button>
                 <button id="speakerBtn" class="btn" data-i18n="speakerOn">Sesi Kapat</button>
               </div>
               <div class="row micMeter">
@@ -101,13 +100,13 @@
             <div class="tabBar">
               <button class="tabBtn active" data-tab="chat">Sohbet</button>
               <button class="tabBtn" data-tab="network">Ağ</button>
+              <button class="tabBtn" data-tab="screen">Ekran</button>
               <button class="tabBtn" data-tab="controls">Kontroller</button>
               <button class="tabBtn" data-tab="log">Log</button>
             </div>
 
             <div class="tabContent">
-              <section class="card column chatCard tabPane active" data-tab="chat">
-                <div class="cardTitle" data-i18n="chatTitle">Sohbet</div>
+              <section class="tabPane chatPane active" data-tab="chat">
                 <div id="chatMessages" class="chatMessages"></div>
                 <div class="chatInputRow">
                   <input
@@ -132,16 +131,24 @@
                 </div>
               </section>
 
+              <section class="tabPane screenPane" data-tab="screen">
+                <div class="screenHeader">
+                  <div class="screenTitle" data-i18n="screenShareTitle">Ekran Paylaşımı</div>
+                  <div class="screenActions">
+                    <button id="screenShareBtn" class="btn" disabled data-i18n="screenShareStart">Ekran Paylaş</button>
+                    <button id="screenStopBtn" class="btn danger" data-i18n="screenShareStop">Paylaşımı Durdur</button>
+                    <button id="screenFullscreenBtn" class="btn small" data-i18n="fullscreenEnter">Tam Ekran</button>
+                  </div>
+                </div>
+                <div id="screenPreview" class="screenPreview">
+                  <video id="screenVideo" autoplay playsinline muted></video>
+                  <div id="screenStatus" class="screenEmpty" data-i18n="screenShareEmpty">Ekran paylaşımı yok.</div>
+                </div>
+              </section>
+
               <section class="card column audioCardPanel tabPane" data-tab="controls">
                 <div class="cardTitle" data-i18n="audioTitle">Ses Kontrolleri</div>
                 <div id="audioList" class="audioList"></div>
-
-                <div class="cardTitle secondary" data-i18n="screenShareTitle">Ekran Paylaşımı</div>
-                <div class="screenContainer">
-                  <video id="screenVideo" autoplay playsinline muted></video>
-                  <button id="screenFullscreenBtn" class="btn small" data-i18n="fullscreenEnter">Tam Ekran</button>
-                  <div id="screenStatus" class="mutedText" data-i18n="screenShareEmpty">Ekran paylaşımı yok.</div>
-                </div>
 
                 <div id="moderationPanel" class="accordion">
                   <button id="moderationToggle" class="accordionHeader">Moderasyon</button>
@@ -209,14 +216,14 @@
                 <span class="switchSlider"></span>
                 <span class="switchLabel">AGC (Otomatik Gain)</span>
               </label>
-              <label class="switch">
-                <input id="advancedAudioToggle" type="checkbox" checked />
-                <span class="switchSlider"></span>
-                <span class="switchLabel" data-i18n="advancedAudioToggle">Gelişmiş Gürültü Azaltma</span>
-              </label>
             </div>
 
             <div class="row audioSettings">
+              <div class="sliderRow">
+                <label class="label" for="micGain">Mikrofon Seviyesi</label>
+                <span id="micGainValue" class="mutedText">100%</span>
+              </div>
+              <input id="micGain" type="range" min="0" max="200" step="1" value="100" />
               <div class="sliderRow">
                 <label class="label" for="highPassFreq" data-i18n="highPassLabel">High-pass (Hz)</label>
                 <span id="highPassValue" class="mutedText">90 Hz</span>
@@ -287,7 +294,7 @@
         </div>
       </div>
     </main>
-    <small id="version">Sürüm 0.3.0 Beta</small>
+    <small id="version">Sürüm 0.4.0 Beta</small>
     <div id="toastContainer" class="toastContainer"></div>
 
     <div id="micTestModal" class="modal hidden">

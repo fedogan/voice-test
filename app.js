@@ -10,7 +10,7 @@ const t = {
   nicknamePlaceholder: 'örn: Caryx',
   serverUrlLabel: 'Signaling Server URL (bunla işin yok %99 ihtimalle)',
   serverUrlPlaceholder: 'örn: ?server=https://diye-olan-bi-link.com',
-  noiseToggle: 'Gürültü azaltma (Bunu kapatınca bazen buglar düzeliyor)',
+  noiseToggle: 'Gürültü azaltma',
   joinBtn: 'Katıl',
   createBtn: 'Oda oluştur',
   muteBtn: 'Mikrofonu Sessize Al',
@@ -38,16 +38,15 @@ const t = {
   screenShareUnsupported: 'Bu cihazda ekran paylaşımı desteklenmiyor.',
   screenShareError: 'Ekran paylaşımı başlatılamadı.',
   screenShareEnded: 'Ekran paylaşımı bitti.',
-  advancedAudioToggle: 'Gelişmiş Gürültü Azaltma (Bu ayarları denemek için koydum güzel değerler bulunca kaldıracağım)',
   highPassLabel: 'High-pass (Hz)',
   compressorToggle: 'Compressor',
   gateThresholdLabel: 'Gate Threshold (dB)',
   gateAttackLabel: 'Gate Attack (ms)',
   gateReleaseLabel: 'Gate Release (ms)',
   gateFloorLabel: 'Gate Floor (dB)',
-  advancedAudioOn: 'Gelişmiş gürültü azaltma açıldı.',
-  advancedAudioOff: 'Gelişmiş gürültü azaltma kapatıldı.',
-  advancedAudioError: 'Gelişmiş gürültü azaltma başlatılamadı. Normal mikrofon kullanılıyor.',
+  advancedAudioOn: 'Gürültü azaltma açıldı.',
+  advancedAudioOff: 'Gürültü azaltma kapatıldı.',
+  advancedAudioError: 'Gürültü azaltma işlem hattı başlatılamadı. Normal mikrofon kullanılıyor.',
   fullscreenEnter: 'Tam Ekran',
   fullscreenExit: 'Çık',
   fullscreenUnsupported: 'Tam ekran desteklenmiyor.'
@@ -91,9 +90,11 @@ const els = {
   speakerBtn: document.getElementById('speakerBtn'),
   audioList: document.getElementById('audioList'),
   screenShareBtn: document.getElementById('screenShareBtn'),
+  screenStopBtn: document.getElementById('screenStopBtn'),
   screenVideo: document.getElementById('screenVideo'),
   screenStatus: document.getElementById('screenStatus'),
   screenFullscreenBtn: document.getElementById('screenFullscreenBtn'),
+  screenPreview: document.getElementById('screenPreview'),
   statusConn: document.getElementById('statusConn'),
   statusPing: document.getElementById('statusPing'),
   statusMic: document.getElementById('statusMic'),
@@ -132,7 +133,8 @@ const els = {
   settingsDrawer: document.getElementById('settingsDrawer'),
   settingsClose: document.getElementById('settingsClose'),
   toastContainer: document.getElementById('toastContainer'),
-  advancedAudioToggle: document.getElementById('advancedAudioToggle'),
+  micGain: document.getElementById('micGain'),
+  micGainValue: document.getElementById('micGainValue'),
   highPassFreq: document.getElementById('highPassFreq'),
   highPassValue: document.getElementById('highPassValue'),
   compressorToggle: document.getElementById('compressorToggle'),
@@ -187,6 +189,7 @@ let audioSourceNode = null;
 let highPassNode = null;
 let compressorNode = null;
 let gateNode = null;
+let gainNode = null;
 let destinationNode = null;
 let processedStream = null;
 let processedTrack = null;
@@ -203,7 +206,7 @@ const audioSettings = {
   gateHysteresis: 6,
   highPass: 90,
   compressor: false,
-  advanced: true
+  micGain: 1
 };
 
 const deviceSettings = {
@@ -290,7 +293,9 @@ function loadAudioSettings() {
     if (typeof parsed.gateHysteresis === 'number') audioSettings.gateHysteresis = parsed.gateHysteresis;
     if (typeof parsed.highPass === 'number') audioSettings.highPass = parsed.highPass;
     if (typeof parsed.compressor === 'boolean') audioSettings.compressor = parsed.compressor;
-    if (typeof parsed.advanced === 'boolean') audioSettings.advanced = parsed.advanced;
+    if (typeof parsed.micGain === 'number') {
+      audioSettings.micGain = Math.max(0, Math.min(2, parsed.micGain));
+    }
   } catch (_) {
     // ignore settings parse errors
   }
@@ -317,6 +322,8 @@ function saveDeviceSettings() {
 }
 
 function updateAudioSettingsUI() {
+  if (els.micGain) els.micGain.value = String(Math.round(audioSettings.micGain * 100));
+  if (els.micGainValue) els.micGainValue.textContent = `${Math.round(audioSettings.micGain * 100)}%`;
   if (els.highPassFreq) els.highPassFreq.value = String(audioSettings.highPass);
   if (els.highPassValue) els.highPassValue.textContent = `${audioSettings.highPass} Hz`;
   if (els.gateThreshold) els.gateThreshold.value = String(audioSettings.gateThreshold);
@@ -328,7 +335,6 @@ function updateAudioSettingsUI() {
   if (els.gateFloor) els.gateFloor.value = String(audioSettings.gateFloor);
   if (els.gateFloorValue) els.gateFloorValue.textContent = `${audioSettings.gateFloor} dB`;
   if (els.compressorToggle) els.compressorToggle.checked = audioSettings.compressor;
-  if (els.advancedAudioToggle) els.advancedAudioToggle.checked = audioSettings.advanced;
 }
 
 async function updateDeviceLists() {
@@ -393,6 +399,11 @@ function updateGateParams() {
   if (gateNode.port) {
     gateNode.port.postMessage({ type: 'debug', enabled: AUDIO_GATE_DEBUG });
   }
+}
+
+function updateGainParams() {
+  if (!gainNode || !audioCtx) return;
+  gainNode.gain.setValueAtTime(audioSettings.micGain, audioCtx.currentTime);
 }
 
 function updateCompressorParams() {
@@ -481,7 +492,7 @@ function startSpeakerLoop() {
 }
 
 function getActiveMicStream() {
-  if (audioSettings.advanced && processedStream) return processedStream;
+  if (processedStream && currentMicTrack === processedTrack) return processedStream;
   return rawMicStream;
 }
 
@@ -713,67 +724,79 @@ function ensureAudioNodes({ resetSource = false } = {}) {
     }
     audioSourceNode = audioCtx.createMediaStreamSource(rawMicStream);
   }
-  if (!highPassNode) {
-    highPassNode = audioCtx.createBiquadFilter();
-    highPassNode.type = 'highpass';
-  }
-  if (!compressorNode) {
-    compressorNode = audioCtx.createDynamicsCompressor();
-  }
-  if (!gateNode) {
-    gateNode = new AudioWorkletNode(audioCtx, 'noise-gate', {
-      parameterData: {
-        threshold: audioSettings.gateThreshold,
-        hysteresisDb: audioSettings.gateHysteresis,
-        attack: audioSettings.gateAttack,
-        release: audioSettings.gateRelease,
-        floor: audioSettings.gateFloor
-      }
-    });
+  if (!gainNode) {
+    gainNode = audioCtx.createGain();
   }
   if (!destinationNode) {
     destinationNode = audioCtx.createMediaStreamDestination();
   }
-
-  try { highPassNode.disconnect(); } catch (_) {}
-  try { gateNode.disconnect(); } catch (_) {}
-  try { compressorNode.disconnect(); } catch (_) {}
-
-  audioSourceNode.connect(highPassNode);
-  highPassNode.connect(gateNode);
-  if (audioSettings.compressor) {
-    gateNode.connect(compressorNode);
-    compressorNode.connect(destinationNode);
-  } else {
-    gateNode.connect(destinationNode);
+  if (noiseEnabled) {
+    if (!highPassNode) {
+      highPassNode = audioCtx.createBiquadFilter();
+      highPassNode.type = 'highpass';
+    }
+    if (!compressorNode) {
+      compressorNode = audioCtx.createDynamicsCompressor();
+    }
+    if (!gateNode && audioWorkletLoaded) {
+      gateNode = new AudioWorkletNode(audioCtx, 'noise-gate', {
+        parameterData: {
+          threshold: audioSettings.gateThreshold,
+          hysteresisDb: audioSettings.gateHysteresis,
+          attack: audioSettings.gateAttack,
+          release: audioSettings.gateRelease,
+          floor: audioSettings.gateFloor
+        }
+      });
+    }
   }
+
+  try { highPassNode && highPassNode.disconnect(); } catch (_) {}
+  try { gateNode && gateNode.disconnect(); } catch (_) {}
+  try { compressorNode && compressorNode.disconnect(); } catch (_) {}
+  try { gainNode && gainNode.disconnect(); } catch (_) {}
+
+  if (noiseEnabled && gateNode && highPassNode) {
+    audioSourceNode.connect(highPassNode);
+    highPassNode.connect(gateNode);
+    if (audioSettings.compressor && compressorNode) {
+      gateNode.connect(compressorNode);
+      compressorNode.connect(gainNode);
+    } else {
+      gateNode.connect(gainNode);
+    }
+  } else {
+    audioSourceNode.connect(gainNode);
+  }
+  gainNode.connect(destinationNode);
 
   processedStream = destinationNode.stream;
   processedTrack = processedStream.getAudioTracks()[0] || null;
-  highPassNode.frequency.setValueAtTime(audioSettings.highPass, audioCtx.currentTime);
+  if (highPassNode) {
+    highPassNode.frequency.setValueAtTime(audioSettings.highPass, audioCtx.currentTime);
+  }
   updateCompressorParams();
   updateGateParams();
+  updateGainParams();
 }
 
 function updateAudioParams() {
-  if (!audioCtx || !gateNode || !highPassNode) return;
-  highPassNode.frequency.setValueAtTime(audioSettings.highPass, audioCtx.currentTime);
+  if (!audioCtx) return;
+  if (highPassNode) {
+    highPassNode.frequency.setValueAtTime(audioSettings.highPass, audioCtx.currentTime);
+  }
   updateCompressorParams();
   updateGateParams();
+  updateGainParams();
   ensureAudioNodes();
 }
 
 async function updateProcessedTrack() {
-  if (!audioSettings.advanced) {
-    currentMicTrack = rawMicTrack;
-    applyMuteToTrack(currentMicTrack);
-    setupMicForAllPeers();
-    updateStatusBar();
-    return;
-  }
   try {
     await ensureAudioContext();
-    await ensureAudioWorklet();
+    if (noiseEnabled) {
+      await ensureAudioWorklet();
+    }
     ensureAudioNodes({ resetSource: true });
     currentMicTrack = processedTrack || rawMicTrack;
     applyMuteToTrack(currentMicTrack);
@@ -787,7 +810,7 @@ async function updateProcessedTrack() {
     ensureMicAnalyser();
     updateStatusBar();
     setStatus(t.advancedAudioError);
-    log(`Gelişmiş gürültü azaltma hatası: ${err.message || err}`);
+    log(`Gürültü azaltma hatası: ${err.message || err}`);
   }
 }
 
@@ -803,7 +826,13 @@ function updateSpeakerButton() {
 
 function updateScreenShareButton() {
   if (!els.screenShareBtn) return;
-  els.screenShareBtn.textContent = isScreenSharing ? t.screenShareStop : t.screenShareStart;
+  els.screenShareBtn.textContent = t.screenShareStart;
+  els.screenShareBtn.style.display = isScreenSharing ? 'none' : 'inline-flex';
+  if (els.screenStopBtn) {
+    els.screenStopBtn.textContent = t.screenShareStop;
+    els.screenStopBtn.style.display = isScreenSharing ? 'inline-flex' : 'none';
+    els.screenStopBtn.disabled = !isScreenSharing;
+  }
 }
 
 function updateStatusBar() {
@@ -911,6 +940,9 @@ function setScreenVideoStream(stream, ownerId) {
   if (!els.screenVideo) return;
   els.screenVideo.srcObject = stream || null;
   activeScreenPeerId = stream ? ownerId : null;
+  if (els.screenPreview) {
+    els.screenPreview.classList.toggle('hasStream', Boolean(stream));
+  }
   if (deviceSettings.outputId && els.screenVideo.setSinkId) {
     els.screenVideo.setSinkId(deviceSettings.outputId).catch(() => {});
   }
@@ -971,6 +1003,7 @@ function setUiState({ inRoom }) {
   if (els.chatInput) els.chatInput.disabled = !inRoom;
   if (els.chatSendBtn) els.chatSendBtn.disabled = !inRoom;
   if (els.screenShareBtn) els.screenShareBtn.disabled = !inRoom;
+  if (els.screenStopBtn) els.screenStopBtn.disabled = !inRoom;
 }
 
 function renderParticipants() {
@@ -1042,7 +1075,7 @@ function getAudioConstraints() {
   const audioConstraints = {
     echoCancellation: noiseEnabled,
     noiseSuppression: noiseEnabled,
-    autoGainControl: agcEnabled
+    autoGainControl: noiseEnabled && agcEnabled
   };
   if (deviceSettings.micId) {
     audioConstraints.deviceId = { exact: deviceSettings.micId };
@@ -1862,6 +1895,7 @@ if (els.noiseToggle) {
     noiseEnabled = Boolean(event.target.checked);
     if (currentRoomId) {
       await ensureLocalStream({ forceNew: true });
+      setStatus(noiseEnabled ? t.advancedAudioOn : t.advancedAudioOff);
       log(`Gürültü azaltma ${noiseEnabled ? 'açıldı' : 'kapandı'}.`);
     }
   });
@@ -1916,15 +1950,12 @@ if (els.outputSelect) {
   });
 }
 
-  if (els.advancedAudioToggle) {
-    els.advancedAudioToggle.addEventListener('change', async (event) => {
-      audioSettings.advanced = Boolean(event.target.checked);
+  if (els.micGain) {
+    els.micGain.addEventListener('input', (event) => {
+      audioSettings.micGain = Math.max(0, Math.min(2, Number(event.target.value) / 100));
       saveAudioSettings();
       updateAudioSettingsUI();
-      if (currentRoomId) {
-        await updateProcessedTrack();
-        setStatus(audioSettings.advanced ? t.advancedAudioOn : t.advancedAudioOff);
-      }
+      updateAudioParams();
     });
   }
 
@@ -1933,7 +1964,7 @@ if (els.outputSelect) {
       audioSettings.highPass = Number(event.target.value);
       saveAudioSettings();
       updateAudioSettingsUI();
-      if (audioSettings.advanced) updateAudioParams();
+      updateAudioParams();
     });
   }
 
@@ -1942,7 +1973,7 @@ if (els.outputSelect) {
       audioSettings.compressor = Boolean(event.target.checked);
       saveAudioSettings();
       updateAudioSettingsUI();
-      if (audioSettings.advanced) updateAudioParams();
+      updateAudioParams();
     });
   }
 
@@ -1951,7 +1982,7 @@ if (els.outputSelect) {
       audioSettings.gateThreshold = Number(event.target.value);
       saveAudioSettings();
       updateAudioSettingsUI();
-      if (audioSettings.advanced) updateAudioParams();
+      updateAudioParams();
     });
   }
 
@@ -1960,7 +1991,7 @@ if (els.outputSelect) {
       audioSettings.gateAttack = Number(event.target.value);
       saveAudioSettings();
       updateAudioSettingsUI();
-      if (audioSettings.advanced) updateAudioParams();
+      updateAudioParams();
     });
   }
 
@@ -1969,7 +2000,7 @@ if (els.outputSelect) {
       audioSettings.gateRelease = Number(event.target.value);
       saveAudioSettings();
       updateAudioSettingsUI();
-      if (audioSettings.advanced) updateAudioParams();
+      updateAudioParams();
     });
   }
 
@@ -1978,7 +2009,7 @@ if (els.outputSelect) {
       audioSettings.gateFloor = Number(event.target.value);
       saveAudioSettings();
       updateAudioSettingsUI();
-      if (audioSettings.advanced) updateAudioParams();
+      updateAudioParams();
     });
   }
 
@@ -1992,11 +2023,13 @@ if (els.speakerBtn) {
 
 if (els.screenShareBtn) {
   els.screenShareBtn.addEventListener('click', () => {
-    if (isScreenSharing) {
-      stopScreenShare('manual');
-    } else {
-      startScreenShare();
-    }
+    if (!isScreenSharing) startScreenShare();
+  });
+}
+
+if (els.screenStopBtn) {
+  els.screenStopBtn.addEventListener('click', () => {
+    if (isScreenSharing) stopScreenShare('manual');
   });
 }
 
@@ -2132,6 +2165,7 @@ setText();
 loadAudioSettings();
 loadDeviceSettings();
 updateAudioSettingsUI();
+if (els.noiseToggle) els.noiseToggle.checked = noiseEnabled;
 if (els.agcToggle) els.agcToggle.checked = agcEnabled;
 setUiState({ inRoom: false });
 setView('lobby');
