@@ -566,6 +566,7 @@ function closeMicTestModal() {
 }
 
 function startMicTest() {
+  stopMicTest();
   if (!els.micLoopback) return;
   const stream = getActiveMicStream();
   if (!stream) {
@@ -584,6 +585,7 @@ function startMicTest() {
   micTestData = new Uint8Array(micTestAnalyser.fftSize);
   const source = audioCtx.createMediaStreamSource(stream);
   source.connect(micTestAnalyser);
+  micTestAnalyser._source = source;
   micTestLoopRunning = true;
   const loop = () => {
     if (!micTestLoopRunning) return;
@@ -605,6 +607,17 @@ function startMicTest() {
 
 function stopMicTest() {
   micTestLoopRunning = false;
+  if (micTestAnalyser) {
+    if (micTestAnalyser._source) {
+      try { micTestAnalyser._source.disconnect(); } catch (_) {}
+      micTestAnalyser._source = null;
+    }
+    try { micTestAnalyser.disconnect(); } catch (_) {}
+    micTestAnalyser = null;
+  }
+  if (micTestStream) {
+    micTestStream = null;
+  }
   if (els.micLoopback) els.micLoopback.srcObject = null;
   if (els.micTestVuFill) els.micTestVuFill.style.width = '0%';
   if (els.micTestDb) els.micTestDb.textContent = '- dB';
@@ -1790,7 +1803,15 @@ async function startJoinFlow(roomId) {
   setStatus([`Bağlanılıyor...`, `Oda: ${currentRoomId}`]);
 
   const s = ensureSocket();
-  if (s && s.connected) {
+  if (!s) {
+    pendingJoin = null;
+    currentRoomId = null;
+    setUiState({ inRoom: false });
+    setView('lobby');
+    setStatus('Bağlantı kurulamadı. Socket istemcisi yüklenemedi.');
+    return;
+  }
+  if (s.connected) {
     s.emit('join-room', pendingJoin);
   }
 }
