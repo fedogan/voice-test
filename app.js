@@ -1,7 +1,7 @@
 /* global io */
 
 const t = {
-  subtitle: 'Minimal signaling demo',
+  subtitle: 'Gürültü azaltma dışında her şey düzgün çalışıyor.',
   roomsTitle: 'Odalar',
   refreshRooms: 'Yenile',
   roomIdLabel: 'Oda İsmi',
@@ -48,7 +48,7 @@ const t = {
   advancedAudioOff: 'Gürültü azaltma kapatıldı.',
   advancedAudioError: 'Gürültü azaltma işlem hattı başlatılamadı. Normal mikrofon kullanılıyor.',
   fullscreenEnter: 'Tam Ekran',
-  fullscreenExit: 'Çık',
+  fullscreenExit: 'Tam ekrandan çık',
   fullscreenUnsupported: 'Tam ekran desteklenmiyor.'
 };
 
