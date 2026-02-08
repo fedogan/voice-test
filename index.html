@@ -71,27 +71,35 @@
 
           <section class="card centerColumn">
             <div class="centerControls">
-              <button id="muteBtn" class="btn primary micBtn" disabled data-i18n="muteBtn">Mikrofon</button>
-              <div class="row">
-                <button id="speakerBtn" class="btn" data-i18n="speakerOn">Sesi Kapat</button>
-              </div>
-              <div class="row micMeter">
-                <div class="labelRow">
-                  <span class="label">Mikrofon</span>
-                  <span id="micDb" class="mutedText">- dB</span>
-                </div>
-                <div class="vu">
-                  <div id="vuFill" class="vuFill"></div>
+              <div class="primaryActions">
+                <button id="muteBtn" class="btn primary micBtn" disabled data-i18n="muteBtn">Mikrofon</button>
+                <div class="row">
+                  <button id="speakerBtn" class="btn" data-i18n="speakerOn">Sesi Kapat</button>
                 </div>
               </div>
-              <div class="row">
-                <button id="micTestBtn" class="btn">Mikrofon Testi</button>
-                <button id="echoTestBtn" class="btn">Echo Testi</button>
-                <button id="leaveBtn" class="btn danger" disabled data-i18n="leaveBtn">Çık</button>
-              </div>
-              <div class="status">
-                <div class="statusTitle" data-i18n="statusTitle">Durum</div>
-                <pre id="statusText" class="statusText">Hazır.</pre>
+              <div class="centerScroll">
+                <div class="secondaryCard">
+                  <div class="row micMeter">
+                    <div class="labelRow">
+                      <span class="label">Mikrofon</span>
+                      <span id="micDb" class="mutedText">- dB</span>
+                    </div>
+                    <div class="vu">
+                      <div id="vuFill" class="vuFill"></div>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <button id="micTestBtn" class="btn">Mikrofon Testi</button>
+                    <button id="echoTestBtn" class="btn">Echo Testi</button>
+                  </div>
+                </div>
+                <div class="status">
+                  <div class="statusTitle" data-i18n="statusTitle">Durum</div>
+                  <pre id="statusText" class="statusText">Hazır.</pre>
+                </div>
+                <div class="row leaveRow">
+                  <button id="leaveBtn" class="btn danger" disabled data-i18n="leaveBtn">Çık</button>
+                </div>
               </div>
             </div>
           </section>

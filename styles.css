@@ -124,8 +124,8 @@ body {
 .layout {
   margin-top: 20px;
   display: grid;
-  grid-template-columns: 240px 1fr 360px;
-  gap: 18px;
+  grid-template-columns: 240px minmax(560px, 1fr) 360px;
+  gap: 16px;
   align-items: stretch;
   flex: 1;
   min-height: 0;
@@ -137,7 +137,7 @@ body {
 
 .column {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .leftColumn,
@@ -158,9 +158,56 @@ body {
 }
 
 .centerControls {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   flex: 1;
+  min-height: 0;
+}
+
+.primaryActions {
+  position: sticky;
+  top: 16px;
+  z-index: 3;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.35);
+}
+
+.primaryActions .row {
+  gap: 12px;
+}
+
+.primaryActions .btn.primary {
+  box-shadow: 0 16px 36px rgba(91, 124, 250, 0.35);
+}
+
+.centerScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.secondaryCard {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: var(--card-strong);
+  display: grid;
+  gap: 12px;
+}
+
+.leaveRow {
+  margin-top: auto;
 }
 
 .micBtn {
@@ -171,11 +218,12 @@ body {
 .rightColumn {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   overflow: hidden;
   height: 100%;
-  min-width: 340px;
-  max-width: 420px;
+  width: 100%;
+  min-width: 360px;
+  max-width: 360px;
 }
 
 .tabBar {
@@ -184,15 +232,23 @@ body {
 
 .tabBar {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas:
+    "chat chat screen"
+    "network controls log";
   grid-auto-rows: 40px;
-  grid-auto-flow: row;
   gap: 8px;
   padding: 8px;
   background: rgba(2, 6, 23, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 16px;
 }
+
+.tabBtn[data-tab="chat"] { grid-area: chat; }
+.tabBtn[data-tab="screen"] { grid-area: screen; }
+.tabBtn[data-tab="network"] { grid-area: network; }
+.tabBtn[data-tab="controls"] { grid-area: controls; }
+.tabBtn[data-tab="log"] { grid-area: log; }
 
 .tabBtn {
   width: 100%;
@@ -210,6 +266,7 @@ body {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
+  position: relative;
 }
 
 .tabBtn.active {
@@ -217,6 +274,18 @@ body {
   border: 1px solid rgba(91, 124, 250, 0.5);
   color: var(--text);
   box-shadow: 0 0 12px rgba(91, 124, 250, 0.25);
+}
+
+.tabBtn.active::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 6px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(91, 124, 250, 0.9);
+  box-shadow: 0 0 12px rgba(91, 124, 250, 0.6);
 }
 
 .tabContent {
@@ -233,9 +302,9 @@ body {
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
-  padding: 12px;
+  padding: 16px;
   width: 100%;
-  animation: fadeIn 0.15s ease;
+  animation: fadeIn 0.14s ease;
 }
 
 .tabContent .tabPane.active {
@@ -244,8 +313,8 @@ body {
 }
 
 .chatPane {
-  padding: 12px;
-  gap: 10px;
+  padding: 16px;
+  gap: 12px;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -264,7 +333,7 @@ body {
 
 /* cards */
 .card {
-  padding: 18px;
+  padding: 20px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -274,7 +343,7 @@ body {
 }
 
 .card:hover {
-  transform: scale(1.01);
+  transform: translateY(-1px);
   border-color: rgba(91, 124, 250, 0.35);
 }
 
@@ -336,7 +405,7 @@ select.input {
 .buttons {
   margin-top: 10px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .btn {
@@ -350,7 +419,7 @@ select.input {
 }
 
 .btn:hover {
-  transform: scale(1.02);
+  transform: translateY(-1px);
   border-color: rgba(91, 124, 250, 0.6);
   box-shadow: 0 10px 30px rgba(91, 124, 250, 0.15);
 }
@@ -495,7 +564,7 @@ select.input {
 }
 
 .roomItem:hover {
-  transform: scale(1.02);
+  transform: translateY(-1px);
   border-color: rgba(91, 124, 250, 0.6);
   background: rgba(15, 23, 42, 0.7);
 }
@@ -522,15 +591,15 @@ select.input {
   overflow: auto;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(148, 163, 184, 0.22);
-  padding: 14px;
+  padding: 18px;
   background: rgba(2, 6, 23, 0.5);
   display: grid;
-  gap: 10px;
+  gap: 12px;
   flex: 1;
 }
 
 .chatMessage {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 14px;
   background: rgba(15, 23, 42, 0.7);
   border: 1px solid rgba(148, 163, 184, 0.15);
@@ -745,7 +814,7 @@ select.input {
 .screenActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
 }
 
