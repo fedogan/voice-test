@@ -49,7 +49,8 @@ const t = {
   advancedAudioError: 'Gürültü azaltma işlem hattı başlatılamadı. Normal mikrofon kullanılıyor.',
   fullscreenEnter: 'Tam Ekran',
   fullscreenExit: 'Tam ekrandan çık',
-  fullscreenUnsupported: 'Tam ekran desteklenmiyor.'
+  fullscreenUnsupported: 'Tam ekran desteklenmiyor.',
+  fullscreenFailed: 'Tam ekran açılamadı.'
 };
 
 function setText() {
@@ -64,6 +65,11 @@ function setText() {
 }
 
 const els = {
+  titlebar: document.getElementById('titlebar'),
+  winMinimize: document.getElementById('winMinimize'),
+  winMaximize: document.getElementById('winMaximize'),
+  winFullscreen: document.getElementById('winFullscreen'),
+  winClose: document.getElementById('winClose'),
   roomId: document.getElementById('roomId'),
   nicknameInput: document.getElementById('nicknameInput'),
   joinBtn: document.getElementById('joinBtn'),
@@ -75,6 +81,7 @@ const els = {
   serverUrlInput: document.getElementById('serverUrlInput'),
   serverUrl: document.getElementById('serverUrl'),
   modeSelect: document.getElementById('modeSelect'),
+  screenQualitySelect: document.getElementById('screenQualitySelect'),
   log: document.getElementById('log'),
   roomsList: document.getElementById('roomsList'),
   refreshRoomsBtn: document.getElementById('refreshRoomsBtn'),
@@ -105,6 +112,10 @@ const els = {
   echoTestBtn: document.getElementById('echoTestBtn'),
   micTestModal: document.getElementById('micTestModal'),
   micTestClose: document.getElementById('micTestClose'),
+  screenModal: document.getElementById('screenModal'),
+  screenModalClose: document.getElementById('screenModalClose'),
+  screenModalVideo: document.getElementById('screenModalVideo'),
+  screenModalStatus: document.getElementById('screenModalStatus'),
   micTestVuFill: document.getElementById('micTestVuFill'),
   micTestDb: document.getElementById('micTestDb'),
   micLoopback: document.getElementById('micLoopback'),
@@ -180,7 +191,12 @@ let screenStream = null;
 let screenTrack = null;
 let isScreenSharing = false;
 let activeScreenPeerId = null;
+let screenPopout = null;
+let screenPopoutVideo = null;
 let currentMicTrack = null;
+let windowState = { isMaximized: false, isFullScreen: false };
+let videoRequestedWindowFullscreen = false;
+let isScreenModalOpen = false;
 let rawMicStream = null;
 let rawMicTrack = null;
 let audioCtx = null;
@@ -198,6 +214,15 @@ const AUDIO_SETTINGS_KEY = 'voice-advanced-audio';
 const DEVICE_SETTINGS_KEY = 'voice-devices';
 const TAB_SETTINGS_KEY = 'voice-right-tab';
 const LAST_ROOM_KEY = 'voice-last-room';
+const SCREEN_QUALITY_KEY = 'voice-screen-quality';
+
+const SCREEN_QUALITY_PRESETS = {
+  quality: { key: 'quality', maxBitrate: 3_000_000, maxFramerate: 30, scaleResolutionDownBy: 1.0, trackMaxFramerate: 30 },
+  balanced: { key: 'balanced', maxBitrate: 2_250_000, maxFramerate: 30, scaleResolutionDownBy: 1.5, trackMaxFramerate: 30 },
+  performance: { key: 'performance', maxBitrate: 1_250_000, maxFramerate: 20, scaleResolutionDownBy: 2.0, trackMaxFramerate: 20 }
+};
+
+let screenQualityMode = 'auto'; // 'auto' | 'quality' | 'balanced' | 'performance'
 const audioSettings = {
   gateThreshold: -40,
   gateAttack: 5,
@@ -221,6 +246,8 @@ const SPEAKING_POLL_MS = 100;
 
 const peers = new Map(); // peerId -> { pc, audioEl, pendingCandidates: [] }
 const participants = new Map(); // id -> nickname
+const participantPresence = new Map(); // id -> { muted, speakerMuted, listenOnly, updatedAt }
+const PRESENCE_PREFIX = '__PRESENCE__';
 const speakerAnalysers = new Map(); // peerId -> { analyser, data, sourceNode, lastSpokeAt, speaking }
 let speakerLoopRunning = false;
 let lastSpeakerCheck = 0;
@@ -236,6 +263,7 @@ let micTestData = null;
 let micTestLoopRunning = false;
 let statsIntervalId = null;
 let lastStatsSample = null;
+let lastScreenStatsSample = null;
 let activeTab = 'chat';
 let currentView = 'lobby';
 
@@ -268,6 +296,83 @@ function log(message) {
     els.log.textContent = logLines.join('\n');
     els.log.scrollTop = els.log.scrollHeight;
   }
+}
+
+function getSelfPresence() {
+  return {
+    muted: Boolean(isMuted),
+    speakerMuted: Boolean(isSpeakerMuted),
+    listenOnly: Boolean(listenOnly)
+  };
+}
+
+function getPresenceForParticipant(id) {
+  if (socket && id === socket.id) return getSelfPresence();
+  return participantPresence.get(id) || { muted: false, speakerMuted: false, listenOnly: false };
+}
+
+function getParticipantIndicators(id) {
+  const p = getPresenceForParticipant(id);
+  const indicators = [];
+  if (p.muted || p.listenOnly) indicators.push('🔇');
+  if (p.speakerMuted) indicators.push('🎧');
+  return indicators.join('');
+}
+
+function sendPresenceUpdate() {
+  if (!socket || !socket.connected || !currentRoomId) return;
+  const payload = {
+    t: 'presence',
+    sid: socket.id,
+    ...getSelfPresence(),
+    ts: Date.now()
+  };
+  socket.emit('chat-message', { roomId: currentRoomId, text: `${PRESENCE_PREFIX}${JSON.stringify(payload)}` });
+}
+
+function tryHandlePresenceMessage(payload) {
+  const text = payload && typeof payload.text === 'string' ? payload.text : '';
+  if (!text.startsWith(PRESENCE_PREFIX)) return false;
+  const raw = text.slice(PRESENCE_PREFIX.length);
+  try {
+    const msg = JSON.parse(raw);
+    if (!msg || msg.t !== 'presence') return true;
+    const senderId = payload.fromId || payload.id || payload.from || msg.sid;
+    if (!senderId) return true;
+    participantPresence.set(senderId, {
+      muted: Boolean(msg.muted),
+      speakerMuted: Boolean(msg.speakerMuted),
+      listenOnly: Boolean(msg.listenOnly),
+      updatedAt: typeof msg.ts === 'number' ? msg.ts : Date.now()
+    });
+    renderParticipants();
+  } catch (_) {
+    // ignore parse errors, but swallow message (do not show in chat)
+  }
+  return true;
+}
+
+function playUiBeep({ freq = 660, durationMs = 90, gain = 0.04 } = {}) {
+  void ensureAudioContext().then(() => {
+    if (!audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(gain, audioCtx.currentTime);
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      osc.type = 'sine';
+      osc.connect(g);
+      g.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + durationMs / 1000);
+      osc.onended = () => {
+        try { osc.disconnect(); } catch (_) {}
+        try { g.disconnect(); } catch (_) {}
+      };
+    } catch (_) {
+      // ignore audio errors
+    }
+  });
 }
 
 function showToast(message, type = 'success') {
@@ -315,6 +420,39 @@ function loadDeviceSettings() {
   } catch (_) {
     // ignore parse errors
   }
+}
+
+function loadScreenQualityMode() {
+  const raw = localStorage.getItem(SCREEN_QUALITY_KEY);
+  if (!raw) return;
+  const clean = String(raw).trim();
+  if (clean === 'auto' || clean === 'quality' || clean === 'balanced' || clean === 'performance') {
+    screenQualityMode = clean;
+  }
+}
+
+function saveScreenQualityMode() {
+  localStorage.setItem(SCREEN_QUALITY_KEY, String(screenQualityMode));
+}
+
+function pickAutoScreenPreset() {
+  const viewers = peers.size;
+  if (viewers <= 2) return SCREEN_QUALITY_PRESETS.quality;
+  if (viewers <= 5) return SCREEN_QUALITY_PRESETS.balanced;
+  return SCREEN_QUALITY_PRESETS.performance;
+}
+
+function getEffectiveScreenPreset() {
+  if (screenQualityMode === 'quality') return SCREEN_QUALITY_PRESETS.quality;
+  if (screenQualityMode === 'balanced') return SCREEN_QUALITY_PRESETS.balanced;
+  if (screenQualityMode === 'performance') return SCREEN_QUALITY_PRESETS.performance;
+  return pickAutoScreenPreset();
+}
+
+function applyScreenTrackConstraints(preset) {
+  if (!screenTrack || !screenTrack.applyConstraints) return;
+  const maxFps = preset && preset.trackMaxFramerate ? preset.trackMaxFramerate : 30;
+  screenTrack.applyConstraints({ frameRate: { max: maxFps } }).catch(() => {});
 }
 
 function saveDeviceSettings() {
@@ -683,6 +821,8 @@ function startStatsLoop() {
     let jitter = 0;
     let loss = 0;
     let reports = 0;
+    let videoFramesEncoded = 0;
+    let videoFpsFromStats = 0;
     for (const [peerId, info] of peers.entries()) {
       const stats = await info.pc.getStats();
       stats.forEach((report) => {
@@ -694,6 +834,12 @@ function startStatsLoop() {
           jitter += report.jitter || 0;
           loss += report.packetsLost || 0;
           reports += 1;
+        }
+        if (report.type === 'outbound-rtp' && report.kind === 'video') {
+          videoFramesEncoded += report.framesEncoded || 0;
+          if (typeof report.framesPerSecond === 'number') {
+            videoFpsFromStats = Math.max(videoFpsFromStats, report.framesPerSecond);
+          }
         }
       });
     }
@@ -718,6 +864,15 @@ function startStatsLoop() {
       els.statRtt.textContent = rtt;
     }
     lastStatsSample = { outBytes, inBytes, now, loss };
+
+    if (videoFramesEncoded > 0) {
+      let estimatedFps = videoFpsFromStats || 0;
+      if (!estimatedFps && lastScreenStatsSample && dt > 0) {
+        const frameDelta = videoFramesEncoded - lastScreenStatsSample.framesEncoded;
+        estimatedFps = frameDelta > 0 ? frameDelta / dt : 0;
+      }
+      lastScreenStatsSample = { framesEncoded: videoFramesEncoded, now };
+    }
   }, 1500);
 }
 
@@ -959,12 +1114,103 @@ function setScreenVideoStream(stream, ownerId) {
   if (deviceSettings.outputId && els.screenVideo.setSinkId) {
     els.screenVideo.setSinkId(deviceSettings.outputId).catch(() => {});
   }
+  if (els.screenModalVideo) {
+    els.screenModalVideo.srcObject = isScreenModalOpen ? (stream || null) : null;
+  }
+  if (els.screenModal && els.screenModalStatus) {
+    els.screenModalStatus.textContent = stream ? '' : t.screenShareEmpty;
+    els.screenModal.querySelector('.screenModalBody')?.classList.toggle('hasStream', Boolean(stream));
+  }
   updateFullscreenButton();
 }
 
 function clearScreenVideo(message) {
+  if (isScreenModalOpen) closeScreenModal();
   setScreenVideoStream(null, null);
   setScreenStatusText(message || t.screenShareEmpty);
+}
+
+function hasWindowControls() {
+  return Boolean(window.windowControls && typeof window.windowControls.minimize === 'function');
+}
+
+function applyWindowState(nextState) {
+  if (!nextState) return;
+  windowState = {
+    isMaximized: Boolean(nextState.isMaximized),
+    isFullScreen: Boolean(nextState.isFullScreen)
+  };
+  document.body.classList.toggle('window-maximized', windowState.isMaximized);
+  document.body.classList.toggle('window-fullscreen', windowState.isFullScreen);
+  updateWindowControls();
+}
+
+function updateWindowControls() {
+  if (els.winMaximize) {
+    els.winMaximize.textContent = windowState.isMaximized ? 'REST' : 'MAX';
+    els.winMaximize.title = windowState.isMaximized ? 'Restore' : 'Maximize';
+  }
+  if (els.winFullscreen) {
+    els.winFullscreen.textContent = windowState.isFullScreen ? 'EXIT' : 'FULL';
+    els.winFullscreen.title = windowState.isFullScreen ? 'Exit Fullscreen' : 'Fullscreen';
+  }
+}
+
+async function syncWindowState() {
+  if (!hasWindowControls()) return;
+  try {
+    const [isMaximized, isFullScreen] = await Promise.all([
+      window.windowControls.isMaximized(),
+      window.windowControls.isFullScreen()
+    ]);
+    applyWindowState({ isMaximized, isFullScreen });
+  } catch (_) {
+    // ignore state sync errors
+  }
+}
+
+function initWindowControls() {
+  if (!hasWindowControls()) return;
+  if (els.winMinimize) {
+    els.winMinimize.addEventListener('click', () => {
+      window.windowControls.minimize();
+    });
+  }
+  if (els.winMaximize) {
+    els.winMaximize.addEventListener('click', async () => {
+      if (windowState.isFullScreen && window.windowControls.setFullscreen) {
+        await window.windowControls.setFullscreen(false);
+      }
+      window.windowControls.maximize();
+    });
+  }
+  if (els.winFullscreen) {
+    els.winFullscreen.addEventListener('click', () => {
+      window.windowControls.toggleFullscreen();
+    });
+  }
+  if (els.winClose) {
+    els.winClose.addEventListener('click', () => {
+      window.windowControls.close();
+    });
+  }
+  if (els.titlebar) {
+    els.titlebar.addEventListener('dblclick', (event) => {
+      if (event.target && event.target.closest('.windowControls')) return;
+      if (windowState.isFullScreen) return;
+      window.windowControls.maximize();
+    });
+  }
+  if (typeof window.windowControls.onStateChange === 'function') {
+    window.windowControls.onStateChange((state) => {
+      applyWindowState(state);
+      if (!state.isFullScreen && isFullscreenActive() && videoRequestedWindowFullscreen) {
+        void exitDomFullscreen();
+        videoRequestedWindowFullscreen = false;
+      }
+    });
+  }
+  void syncWindowState();
 }
 
 function isFullscreenActive() {
@@ -975,30 +1221,96 @@ function updateFullscreenButton() {
   if (!els.screenFullscreenBtn) return;
   const hasStream = Boolean(els.screenVideo && els.screenVideo.srcObject);
   els.screenFullscreenBtn.style.display = hasStream ? 'inline-flex' : 'none';
-  els.screenFullscreenBtn.textContent = isFullscreenActive() ? t.fullscreenExit : t.fullscreenEnter;
+  els.screenFullscreenBtn.textContent = isScreenModalOpen ? t.fullscreenExit : t.fullscreenEnter;
 }
 
-async function toggleFullscreen() {
-  if (!els.screenVideo) return;
-  if (!document.fullscreenEnabled && !els.screenVideo.webkitRequestFullscreen) {
-    setStatus(t.fullscreenUnsupported);
+function handleDomFullscreenChange() {
+  const domActive = isFullscreenActive();
+  updateFullscreenButton();
+  if (domActive && !windowState.isFullScreen) {
+    void ensureWindowFullscreen(true);
     return;
   }
-  if (isFullscreenActive()) {
-    if (document.exitFullscreen) {
-      await document.exitFullscreen();
-    } else if (document.webkitExitFullscreen) {
-      await document.webkitExitFullscreen();
+  if (!domActive && videoRequestedWindowFullscreen) {
+    if (hasWindowControls() && window.windowControls.setFullscreen) {
+      void window.windowControls.setFullscreen(false);
     }
+    videoRequestedWindowFullscreen = false;
+  }
+}
+
+function getFullscreenTarget() {
+  return (
+    els.screenVideo ||
+    els.screenPreview ||
+    document.getElementById('screenPreviewVideo') ||
+    document.querySelector('video#screenPreview') ||
+    document.getElementById('screenVideo') ||
+    document.querySelector('.screenPreview video')
+  );
+}
+
+async function requestDomFullscreen(target) {
+  if (!target) throw new Error('Fullscreen target missing');
+  if (target.requestFullscreen) return target.requestFullscreen();
+  if (target.webkitRequestFullscreen) return target.webkitRequestFullscreen();
+  if (target.mozRequestFullScreen) return target.mozRequestFullScreen();
+  if (target.msRequestFullscreen) return target.msRequestFullscreen();
+  throw new Error('Fullscreen API unsupported');
+}
+
+async function exitDomFullscreen() {
+  if (document.exitFullscreen) return document.exitFullscreen();
+  if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+  return undefined;
+}
+
+async function ensureWindowFullscreen(enabled) {
+  if (!hasWindowControls() || typeof window.windowControls.setFullscreen !== 'function') {
+    return false;
+  }
+  try {
+    const next = await window.windowControls.setFullscreen(Boolean(enabled));
+    if (enabled) videoRequestedWindowFullscreen = true;
+    return Boolean(next);
+  } catch (_) {
+    return false;
+  }
+}
+
+function openScreenModal() {
+  if (!els.screenModal || !els.screenModalVideo) {
+    log('Modal açılamadı: modal elementleri bulunamadı.');
+    setStatus('Modal açılamadı: element bulunamadı.');
     return;
   }
-  if (els.screenVideo.requestFullscreen) {
-    await els.screenVideo.requestFullscreen();
-  } else if (els.screenVideo.webkitRequestFullscreen) {
-    await els.screenVideo.webkitRequestFullscreen();
-  } else {
-    setStatus(t.fullscreenUnsupported);
+  const stream = (els.screenVideo && els.screenVideo.srcObject) || screenStream;
+  els.screenModal.classList.remove('hidden');
+  els.screenModal.style.display = 'flex';
+  if (els.screenPreview) {
+    els.screenPreview.classList.add('modal-active');
   }
+  els.screenModalVideo.srcObject = stream || null;
+  if (els.screenModalStatus) {
+    els.screenModalStatus.textContent = stream ? '' : t.screenShareEmpty;
+  }
+  els.screenModal.querySelector('.screenModalBody')?.classList.toggle('hasStream', Boolean(stream));
+  isScreenModalOpen = true;
+  updateFullscreenButton();
+  log(`Modal açıldı. Stream var mı: ${Boolean(stream)}`);
+}
+
+function closeScreenModal() {
+  if (!els.screenModal || !els.screenModalVideo) return;
+  els.screenModal.classList.add('hidden');
+  els.screenModal.style.removeProperty('display');
+  els.screenModalVideo.srcObject = null;
+  if (els.screenPreview) {
+    els.screenPreview.classList.remove('modal-active');
+  }
+  els.screenModal.querySelector('.screenModalBody')?.classList.remove('hasStream');
+  isScreenModalOpen = false;
+  updateFullscreenButton();
 }
 
 function isScreenShareSupported() {
@@ -1031,7 +1343,9 @@ function renderParticipants() {
   participants.forEach((nickname, id) => {
     const li = document.createElement('li');
     const isSelf = socket && id === socket.id;
-    li.textContent = isSelf ? `${nickname} (sen)` : nickname;
+    const indicators = getParticipantIndicators(id);
+    const suffix = indicators ? ` ${indicators}` : '';
+    li.textContent = isSelf ? `${nickname} (sen)${suffix}` : `${nickname}${suffix}`;
     els.usersList.appendChild(li);
   });
 }
@@ -1182,12 +1496,35 @@ async function renegotiatePeer(peerId, reason) {
   }
 }
 
+function configureScreenSender(sender, peerId) {
+  if (!sender || typeof sender.getParameters !== 'function') return;
+  try {
+    const params = sender.getParameters() || {};
+    const baseEncoding = (params.encodings && params.encodings[0]) || {};
+    const nextEncoding = {
+      ...baseEncoding,
+      maxBitrate: 2_500_000,
+      maxFramerate: 30,
+      scaleResolutionDownBy: 1.5
+    };
+    params.encodings = [nextEncoding];
+    sender.setParameters(params).then(() => {
+      log(`[screen] sender parameters (${peerId || 'local'}): ${JSON.stringify(nextEncoding)}`);
+    }).catch((err) => {
+      log(`[screen] sender parameter error (${peerId || 'local'}): ${err.message || err}`);
+    });
+  } catch (err) {
+    log(`[screen] sender parameter error (${peerId || 'local'}): ${err.message || err}`);
+  }
+}
+
 function attachScreenTrackToPeer(peerId) {
   const info = peers.get(peerId);
   if (!info || !screenTrack) return;
   if (info.videoTransceiver) {
     info.videoTransceiver.direction = 'sendrecv';
     info.videoTransceiver.sender.replaceTrack(screenTrack);
+    configureScreenSender(info.videoTransceiver.sender, peerId);
   }
   renegotiatePeer(peerId, 'ekran paylaşımı');
   setupMicForPeer(peerId);
@@ -1216,6 +1553,12 @@ async function startScreenShare() {
     if (!screenTrack) {
       setStatus(t.screenShareError);
       return;
+    }
+    try {
+      const settings = screenTrack.getSettings ? screenTrack.getSettings() : {};
+      log(`[screen] track settings: ${JSON.stringify(settings)}`);
+    } catch (err) {
+      log(`[screen] track settings error: ${err.message || err}`);
     }
     screenTrack.onended = () => stopScreenShare('ended');
     isScreenSharing = true;
@@ -1547,6 +1890,7 @@ function ensureSocket() {
     peersInRoom.forEach((peer) => {
       createPeerConnection(peer.id, true);
     });
+    sendPresenceUpdate();
     socket.emit('list-rooms');
     startStatsLoop();
   });
@@ -1560,18 +1904,21 @@ function ensureSocket() {
     setStatus([`Yeni katılımcı: ${nickname || id}`, `Oda: ${currentRoomId || '-'}`]);
     log(`Yeni katılımcı: ${nickname || id}`);
     showToast(`${nickname || id} odaya katıldı`, 'success');
+    if (!socket || id !== socket.id) playUiBeep({ freq: 740, durationMs: 80 });
   });
 
   socket.on('user-left', ({ id } = {}) => {
     if (!id) return;
     cleanupPeer(id);
     participants.delete(id);
+    participantPresence.delete(id);
     renderParticipants();
     renderAudioControls();
     updateModerationTargets();
     setStatus([`Kullanıcı ayrıldı: ${id}`, `Oda: ${currentRoomId || '-'}`]);
     log(`Kullanıcı ayrıldı: ${id}`);
     showToast(`${id} odadan çıktı`, 'warn');
+    playUiBeep({ freq: 440, durationMs: 90 });
   });
 
   socket.on('host-changed', ({ hostId } = {}) => {
@@ -1601,6 +1948,7 @@ function ensureSocket() {
     updateMuteButton();
     updateStatusBar();
     showToast(reason || 'Mikrofon sessize alındı.', 'warn');
+    sendPresenceUpdate();
   });
 
   socket.on('force-unmute', ({ reason } = {}) => {
@@ -1609,6 +1957,7 @@ function ensureSocket() {
     updateMuteButton();
     updateStatusBar();
     showToast(reason || 'Mikrofon açıldı.', 'success');
+    sendPresenceUpdate();
   });
 
   socket.on('slowmode-warn', ({ ms } = {}) => {
@@ -1620,6 +1969,7 @@ function ensureSocket() {
   });
 
   socket.on('chat-message', (payload) => {
+    if (tryHandlePresenceMessage(payload)) return;
     appendChatMessage(payload);
   });
 
@@ -1703,6 +2053,7 @@ function createPeerConnection(peerId, shouldCreateOffer) {
   if (screenTrack && screenStream) {
     info.videoTransceiver.direction = 'sendrecv';
     info.videoTransceiver.sender.replaceTrack(screenTrack);
+    configureScreenSender(info.videoTransceiver.sender, peerId);
   }
 
   pc.onicecandidate = (event) => {
@@ -1909,6 +2260,7 @@ els.muteBtn.addEventListener('click', () => {
   updateStatusBar();
   setStatus([`Oda: ${currentRoomId || '-'}`, `Mikrofon: ${isMuted ? 'Sessiz' : 'Açık'}`]);
   log(`Mikrofon: ${isMuted ? 'Sessiz' : 'Açık'}`);
+  sendPresenceUpdate();
 });
 
 if (els.noiseToggle) {
@@ -1939,6 +2291,7 @@ if (els.listenOnlyToggle) {
     setupMicForAllPeers();
     updateStatusBar();
     showToast(listenOnly ? 'Listen-only aktif.' : 'Listen-only kapalı.', 'success');
+    sendPresenceUpdate();
   });
 }
 
@@ -1950,6 +2303,7 @@ if (els.deafToggle) {
     Array.from(peers.keys()).forEach(applyRemoteAudioSettings);
     updateStatusBar();
     showToast(isDeaf ? 'Deaf aktif.' : 'Deaf kapalı.', 'success');
+    sendPresenceUpdate();
   });
 }
 
@@ -2039,6 +2393,7 @@ if (els.speakerBtn) {
     isSpeakerMuted = !isSpeakerMuted;
     updateSpeakerButton();
     Array.from(peers.keys()).forEach(applyRemoteAudioSettings);
+    sendPresenceUpdate();
   });
 }
 
@@ -2089,7 +2444,26 @@ if (els.echoTestBtn) {
 
 if (els.screenFullscreenBtn) {
   els.screenFullscreenBtn.addEventListener('click', () => {
-    toggleFullscreen();
+    log('Tam Ekran butonu tıklandı (modal).');
+    if (isScreenModalOpen) {
+      closeScreenModal();
+    } else {
+      openScreenModal();
+    }
+  });
+}
+
+if (els.screenModalClose) {
+  els.screenModalClose.addEventListener('click', () => {
+    closeScreenModal();
+  });
+}
+
+if (els.screenModal) {
+  els.screenModal.addEventListener('click', (event) => {
+    if (event.target === els.screenModal) {
+      closeScreenModal();
+    }
   });
 }
 
@@ -2105,8 +2479,13 @@ if (els.settingsClose) {
   });
 }
 
-document.addEventListener('fullscreenchange', updateFullscreenButton);
-document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+document.addEventListener('fullscreenchange', handleDomFullscreenChange);
+document.addEventListener('webkitfullscreenchange', handleDomFullscreenChange);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && isScreenModalOpen) {
+    closeScreenModal();
+  }
+});
 
 if (els.refreshRoomsBtn) {
   els.refreshRoomsBtn.addEventListener('click', () => {
@@ -2182,6 +2561,7 @@ if (els.chatInput) {
   });
 }
 
+initWindowControls();
 setText();
 loadAudioSettings();
 loadDeviceSettings();

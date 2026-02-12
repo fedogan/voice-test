@@ -7,6 +7,17 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <div id="titlebar" class="titlebar">
+      <div class="titlebarDrag">
+        <span class="appName">Emrecord discord değil</span>
+      </div>
+      <div class="windowControls">
+        <button id="winMinimize" class="winBtn" title="Minimize" aria-label="Minimize">-</button>
+        <button id="winMaximize" class="winBtn" title="Maximize" aria-label="Maximize">MAX</button>
+        <button id="winFullscreen" class="winBtn" title="Fullscreen" aria-label="Fullscreen">FULL</button>
+        <button id="winClose" class="winBtn danger" title="Close" aria-label="Close">X</button>
+      </div>
+    </div>
     <main class="app">
       <section id="lobbyView" class="view active">
         <div class="lobbyHeader">
@@ -302,7 +313,7 @@
         </div>
       </div>
     </main>
-    <small id="version">Sürüm 0.4.0 Beta</small>
+    <small id="version">Sürüm 1.5.1</small>
     <div id="toastContainer" class="toastContainer"></div>
 
     <div id="micTestModal" class="modal hidden">
@@ -324,6 +335,18 @@
           <div class="row">
             <div class="mutedText">Echo testi sonucu: <strong id="echoResult">-</strong></div>
           </div>
+        </div>
+      </div>
+    </div>
+    <div id="screenModal" class="modal hidden">
+      <div class="modalContent screenModalContent">
+        <div class="modalHeader screenModalHeader">
+          <h3>Ekran Paylaşımı</h3>
+          <button id="screenModalClose" class="btn small">Kapat</button>
+        </div>
+        <div class="screenModalBody">
+          <video id="screenModalVideo" autoplay playsinline muted controls></video>
+          <div id="screenModalStatus" class="screenModalStatus">Ekran paylaşımı yok.</div>
         </div>
       </div>
     </div>
