@@ -38,165 +38,189 @@ const io = new Server(server, {
   }
 });
 
-const rooms = new Map(); // roomId -> { members: Map<string, { nickname }>, createdAt, hostId, banned:Set, slowModeMs }
+const rooms = new Map(); // roomId -> { members: Map<clientId, member>, createdAt, isHidden, publicName, hostId, banned:Set<clientId>, slowModeMs }
 const socketToRoom = new Map(); // socketId -> roomId
-const socketToNick = new Map(); // socketId -> nickname
+const socketToClientId = new Map(); // socketId -> clientId
+const clientToNick = new Map(); // clientId -> nickname
 
-function resolveNickname(input, socketId) {
+function resolveNickname(input, clientId, socketId) {
   if (typeof input === 'string' && input.trim().length > 0) {
     return input.trim().slice(0, 32);
+  }
+  if (typeof clientId === 'string' && clientId.trim().length > 0) {
+    return `Kullanıcı${clientId.trim().slice(0, 4)}`;
   }
   return `Kullanıcı${socketId.slice(0, 4)}`;
 }
 
-function normalizeMembers(roomId) {
-  const room = rooms.get(roomId);
-  if (!room) return null;
-  if (room.members instanceof Map) return room.members;
-  const raw = room.members;
-  const members = new Map();
-  if (raw instanceof Set) {
-    raw.forEach((id) => {
-      const nickname = socketToNick.get(id) || resolveNickname(null, id);
-      members.set(id, { nickname });
-    });
-  } else if (Array.isArray(raw)) {
-    raw.forEach((id) => {
-      const nickname = socketToNick.get(id) || resolveNickname(null, String(id));
-      members.set(String(id), { nickname });
-    });
-  } else if (raw && typeof raw === 'object') {
-    Object.keys(raw).forEach((id) => {
-      const val = raw[id];
-      const nickname = val && val.nickname ? val.nickname : socketToNick.get(id) || resolveNickname(null, id);
-      members.set(id, { nickname });
-    });
+function resolveClientId(input, socketId) {
+  if (typeof input === 'string') {
+    const clean = input.trim().slice(0, 64);
+    if (/^[A-Za-z0-9:_-]{4,64}$/.test(clean)) {
+      return clean;
+    }
   }
-  room.members = members;
-  return members;
+  return `guest-${socketId.slice(0, 12)}`;
+}
+
+function isHiddenRoomId(roomId) {
+  const value = typeof roomId === 'string' ? roomId.trim() : '';
+  if (!value) return false;
+  const lowered = value.toLowerCase();
+  if (lowered.startsWith('private-') || lowered.startsWith('hidden-') || lowered.startsWith('code:')) {
+    return true;
+  }
+  // Invite-like compact room ids: 10-20 chars, letters/digits with optional - _ :
+  if (/^(?=.{10,20}$)[A-Za-z0-9:_-]+$/.test(value) && !/\s/.test(value)) {
+    return true;
+  }
+  return false;
 }
 
 function ensureRoom(roomId) {
   if (!rooms.has(roomId)) {
     rooms.set(roomId, {
       createdAt: Date.now(),
+      isHidden: isHiddenRoomId(roomId),
+      publicName: null,
       members: new Map(),
       hostId: null,
       banned: new Set(),
       slowModeMs: 0
     });
   }
-  const room = rooms.get(roomId);
-  normalizeMembers(roomId);
-  return room;
+  return rooms.get(roomId);
 }
 
 function getRoomsList() {
   return Array.from(rooms.entries())
     .map(([roomId, info]) => {
-      const members = info.members instanceof Map ? info.members : normalizeMembers(roomId);
-      return { roomId, count: members ? members.size : 0, createdAt: info.createdAt };
+      const members = info.members instanceof Map ? info.members : new Map();
+      return {
+        roomId,
+        count: members.size,
+        createdAt: info.createdAt,
+        isHidden: Boolean(info.isHidden)
+      };
     })
-    .filter((room) => room.count > 0);
+    .filter((room) => room.count > 0 && !room.isHidden);
 }
 
 function broadcastRoomsUpdate() {
   io.emit('rooms-updated', getRoomsList());
 }
 
-function emitRoomState(roomId) {
-  const room = rooms.get(roomId);
-  if (!room) {
-    io.to(roomId).emit('room-state', { roomId, users: [], hostId: null });
-    return;
-  }
-  const members = normalizeMembers(roomId);
-  const users = members
-    ? Array.from(members.entries()).map(([id, data]) => ({ id, nickname: data.nickname }))
-    : [];
-  io.to(roomId).emit('room-state', { roomId, users, hostId: room.hostId || null });
-}
-
-function removeFromRoom(roomId, socketId) {
+function removeFromRoom(roomId, clientId, socketId) {
   const room = rooms.get(roomId);
   if (!room) return;
-  const members = normalizeMembers(roomId);
-  if (members) members.delete(socketId);
-  if (room.hostId === socketId) {
-    const nextHost = members && members.size > 0 ? Array.from(members.keys())[0] : null;
+  const members = room.members;
+  const member = members.get(clientId);
+  if (!member) return;
+  if (socketId && member.socketId !== socketId) return;
+  members.delete(clientId);
+  if (room.hostId === clientId) {
+    const nextHost = members.size > 0 ? Array.from(members.keys())[0] : null;
     room.hostId = nextHost;
     if (nextHost) {
       io.to(roomId).emit('host-changed', { hostId: nextHost });
     }
   }
-  if (!members || members.size === 0) rooms.delete(roomId);
+  if (members.size === 0) rooms.delete(roomId);
 }
 
-function isHost(room, socketId) {
-  return room && room.hostId === socketId;
+function isHost(room, clientId) {
+  return room && room.hostId === clientId;
 }
 
 io.on('connection', (socket) => {
-  socket.on('join-room', ({ roomId, nickname } = {}) => {
+  socket.on('join-room', ({ roomId, nickname, clientId } = {}) => {
     if (typeof roomId !== 'string' || roomId.trim().length === 0) {
       socket.emit('users-in-room', { roomId: null, users: [] });
       return;
     }
 
     const cleanRoomId = roomId.trim();
-    const cleanNickname = resolveNickname(nickname, socket.id);
-    const existingRoom = rooms.get(cleanRoomId);
-    if (existingRoom && existingRoom.banned && existingRoom.banned.has(socket.id)) {
-      socket.emit('join-denied', { reason: 'Bu odadan yasaklandın.' });
-      return;
-    }
+    const stableClientId = resolveClientId(clientId, socket.id);
+    const cleanNickname = resolveNickname(nickname, stableClientId, socket.id);
 
     const prevRoom = socketToRoom.get(socket.id);
+    const prevClientId = socketToClientId.get(socket.id) || stableClientId;
     if (prevRoom && prevRoom !== cleanRoomId) {
       socket.leave(prevRoom);
-      removeFromRoom(prevRoom, socket.id);
-      socket.to(prevRoom).emit('user-left', { id: socket.id });
-      emitRoomState(prevRoom);
+      removeFromRoom(prevRoom, prevClientId, socket.id);
+      socket.to(prevRoom).emit('user-left', { id: prevClientId });
       broadcastRoomsUpdate();
     }
 
     socketToRoom.set(socket.id, cleanRoomId);
-    socketToNick.set(socket.id, cleanNickname);
+    socketToClientId.set(socket.id, stableClientId);
+    clientToNick.set(stableClientId, cleanNickname);
     socket.join(cleanRoomId);
 
     const room = ensureRoom(cleanRoomId);
-    room.members.set(socket.id, { nickname: cleanNickname });
-    if (!room.hostId) {
-      room.hostId = socket.id;
+    if (room.banned && room.banned.has(stableClientId)) {
+      socket.emit('join-denied', { reason: 'Bu odadan yasaklandın.' });
+      return;
+    }
+
+    const existing = room.members.get(stableClientId);
+    if (existing && existing.socketId !== socket.id) {
+      const oldSocket = io.sockets.sockets.get(existing.socketId);
+      if (oldSocket) oldSocket.disconnect(true);
+    }
+
+    room.members.set(stableClientId, {
+      clientId: stableClientId,
+      socketId: socket.id,
+      nickname: cleanNickname,
+      viewEnabled: existing ? existing.viewEnabled !== false : true,
+      joinedAt: existing ? existing.joinedAt : Date.now()
+    });
+
+    if (!room.hostId || !room.members.has(room.hostId)) {
+      room.hostId = stableClientId;
     }
 
     const users = Array.from(room.members.entries())
-      .filter(([id]) => id !== socket.id)
-      .map(([id, data]) => ({ id, nickname: data.nickname }));
+      .filter(([id]) => id !== stableClientId)
+      .map(([id, data]) => ({
+        id,
+        nickname: data.nickname,
+        viewEnabled: data.viewEnabled !== false
+      }));
     socket.emit('users-in-room', { roomId: cleanRoomId, users, hostId: room.hostId });
 
-    socket.to(cleanRoomId).emit('user-joined', { id: socket.id, nickname: cleanNickname });
+    if (!existing) {
+      socket.to(cleanRoomId).emit('user-joined', {
+        id: stableClientId,
+        nickname: cleanNickname,
+        viewEnabled: true
+      });
+    } else {
+      socket.to(cleanRoomId).emit('viewer-updated', {
+        roomId: cleanRoomId,
+        clientId: stableClientId,
+        viewEnabled: room.members.get(stableClientId).viewEnabled !== false
+      });
+      socket.to(cleanRoomId).emit('nickname-updated', { id: stableClientId, nickname: cleanNickname });
+    }
     io.to(cleanRoomId).emit('host-changed', { hostId: room.hostId });
-    emitRoomState(cleanRoomId);
-    console.log('[join-room]', { roomId: cleanRoomId, socketId: socket.id, members: room.members.size });
     broadcastRoomsUpdate();
   });
 
   socket.on('signal', ({ roomId, to, data } = {}) => {
     if (typeof to !== 'string' || !data) return;
-    const mappedRoom = socketToRoom.get(socket.id);
-    if (!mappedRoom) return;
     const activeRoom = typeof roomId === 'string' && roomId.trim().length > 0
       ? roomId.trim()
-      : mappedRoom;
-    if (activeRoom !== mappedRoom) return;
+      : socketToRoom.get(socket.id);
+    if (!activeRoom) return;
     const room = rooms.get(activeRoom);
     if (!room) return;
-    const members = normalizeMembers(activeRoom);
-    if (!members || !members.has(socket.id) || !members.has(to)) return;
-    const signalType = data && typeof data === 'object' && typeof data.type === 'string' ? data.type : undefined;
-    console.log('[signal]', { from: socket.id, to, roomId: activeRoom, type: signalType });
-    io.to(to).emit('signal', { to, from: socket.id, data });
+    const fromClientId = socketToClientId.get(socket.id);
+    if (!fromClientId || !room.members.has(fromClientId)) return;
+    const targetMember = room.members.get(to);
+    if (!targetMember || !targetMember.socketId) return;
+    io.to(targetMember.socketId).emit('signal', { to, from: fromClientId, data });
   });
 
   socket.on('list-rooms', () => {
@@ -219,8 +243,8 @@ io.on('connection', (socket) => {
       socket.data.lastMessageAt = Date.now();
     }
     const payload = {
-      fromId: socket.id,
-      nickname: socketToNick.get(socket.id) || resolveNickname(null, socket.id),
+      fromId: socketToClientId.get(socket.id),
+      nickname: clientToNick.get(socketToClientId.get(socket.id)) || resolveNickname(null, socketToClientId.get(socket.id), socket.id),
       text: cleanText,
       ts: Date.now()
     };
@@ -230,22 +254,45 @@ io.on('connection', (socket) => {
   socket.on('set-nickname', ({ roomId, nickname } = {}) => {
     const activeRoom = socketToRoom.get(socket.id);
     if (!activeRoom || activeRoom !== roomId) return;
-    const cleanNickname = resolveNickname(nickname, socket.id);
-    socketToNick.set(socket.id, cleanNickname);
+    const clientId = socketToClientId.get(socket.id);
+    if (!clientId) return;
+    const cleanNickname = resolveNickname(nickname, clientId, socket.id);
+    clientToNick.set(clientId, cleanNickname);
     const room = rooms.get(activeRoom);
     if (room) {
-      const members = normalizeMembers(activeRoom);
-      if (members) members.set(socket.id, { nickname: cleanNickname });
+      const member = room.members.get(clientId);
+      if (member) {
+        member.nickname = cleanNickname;
+        room.members.set(clientId, member);
+      }
     }
-    io.to(activeRoom).emit('nickname-updated', { id: socket.id, nickname: cleanNickname });
-    emitRoomState(activeRoom);
+    io.to(activeRoom).emit('nickname-updated', { id: clientId, nickname: cleanNickname });
+  });
+
+  socket.on('set-view-enabled', ({ roomId, enabled } = {}) => {
+    const activeRoom = socketToRoom.get(socket.id);
+    if (!activeRoom || activeRoom !== roomId) return;
+    const room = rooms.get(activeRoom);
+    if (!room) return;
+    const clientId = socketToClientId.get(socket.id);
+    if (!clientId) return;
+    const member = room.members.get(clientId);
+    if (!member) return;
+    member.viewEnabled = enabled !== false;
+    room.members.set(clientId, member);
+    io.to(activeRoom).emit('viewer-updated', {
+      roomId: activeRoom,
+      clientId,
+      viewEnabled: member.viewEnabled
+    });
   });
 
   socket.on('moderation-action', ({ roomId, action, targetId, slowModeMs } = {}) => {
     const activeRoom = socketToRoom.get(socket.id);
     if (!activeRoom || activeRoom !== roomId) return;
     const room = rooms.get(activeRoom);
-    if (!isHost(room, socket.id)) {
+    const actorClientId = socketToClientId.get(socket.id);
+    if (!isHost(room, actorClientId)) {
       socket.emit('moderation-error', { message: 'Bu işlem için yetkin yok.' });
       return;
     }
@@ -258,38 +305,42 @@ io.on('connection', (socket) => {
     }
     if (typeof targetId !== 'string' || targetId.trim().length === 0) return;
     const target = targetId.trim();
-    if (!room.members.has(target)) return;
+    const targetMember = room.members.get(target);
+    if (!targetMember || !targetMember.socketId) return;
     if (action === 'mute') {
-      io.to(target).emit('force-mute', { reason: 'Host tarafından sessize alındın.' });
+      io.to(targetMember.socketId).emit('force-mute', { reason: 'Host tarafından sessize alındın.' });
       return;
     }
     if (action === 'unmute') {
-      io.to(target).emit('force-unmute', { reason: 'Host mikrofonu açtı.' });
+      io.to(targetMember.socketId).emit('force-unmute', { reason: 'Host mikrofonu açtı.' });
       return;
     }
     if (action === 'kick') {
-      io.to(target).emit('kicked', { reason: 'Host tarafından odadan çıkarıldın.' });
-      io.sockets.sockets.get(target)?.disconnect(true);
+      io.to(targetMember.socketId).emit('kicked', { reason: 'Host tarafından odadan çıkarıldın.' });
+      io.sockets.sockets.get(targetMember.socketId)?.disconnect(true);
       return;
     }
     if (action === 'ban') {
       room.banned.add(target);
-      io.to(target).emit('banned', { reason: 'Host tarafından yasaklandın.' });
-      io.sockets.sockets.get(target)?.disconnect(true);
+      io.to(targetMember.socketId).emit('banned', { reason: 'Host tarafından yasaklandın.' });
+      io.sockets.sockets.get(targetMember.socketId)?.disconnect(true);
     }
   });
 
   socket.on('disconnect', () => {
     const roomId = socketToRoom.get(socket.id);
-    if (!roomId) return;
-
-    console.log('[disconnect]', { socketId: socket.id, roomId });
-    removeFromRoom(roomId, socket.id);
-    socket.to(roomId).emit('user-left', { id: socket.id });
-    emitRoomState(roomId);
-    broadcastRoomsUpdate();
+    const clientId = socketToClientId.get(socket.id);
+    if (roomId && clientId) {
+      const room = rooms.get(roomId);
+      const member = room && room.members ? room.members.get(clientId) : null;
+      if (member && member.socketId === socket.id) {
+        removeFromRoom(roomId, clientId, socket.id);
+        socket.to(roomId).emit('user-left', { id: clientId });
+        broadcastRoomsUpdate();
+      }
+    }
     socketToRoom.delete(socket.id);
-    socketToNick.delete(socket.id);
+    socketToClientId.delete(socket.id);
   });
 });
 
