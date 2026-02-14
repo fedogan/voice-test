@@ -303,7 +303,6 @@ const SPEAKING_HOLD_MS = 200;
 const SPEAKING_POLL_MS = 100;
 
 const peers = new Map(); // peerId -> { pc, audioEl, pendingCandidates: [] }
-const remoteAudioStreams = new Map(); // peerId -> MediaStream
 const participants = new Map(); // id -> nickname
 const participantViewEnabled = new Map(); // id -> viewEnabled
 const participantPresence = new Map(); // id -> { muted, speakerMuted, listenOnly, updatedAt }
@@ -1796,156 +1795,15 @@ function logPeerSenders(peerId, pc) {
   }
 }
 
-function getTransceiverDirectionLabel(transceiver) {
-  if (!transceiver) return 'n/a';
-  return transceiver.currentDirection || transceiver.direction || 'unknown';
-}
-
-function describeTransceivers(pc) {
-  return pc
-    .getTransceivers()
-    .map((tx, idx) => `${idx}:${tx.mid || '?'}:${tx.receiver?.track?.kind || 'unknown'}:${getTransceiverDirectionLabel(tx)}`)
-    .join(', ');
-}
-
-function ensureAudioSendrecv(info) {
-  if (!info || !info.audioTransceiver) return;
-  if (info.audioTransceiver.direction !== 'sendrecv') {
-    if (info.audioTransceiver) {
-      if (typeof info.audioTransceiver.setDirection === 'function') {
-        info.audioTransceiver.setDirection('sendrecv');
-      } else {
-        info.audioTransceiver.direction = 'sendrecv';
-      }
-    }
-  }
-}
-
-function ensureLocalTracks(pc, stream, info) {
-  if (!pc || !stream) return;
-  const activeMicStream = getActiveMicStream() || stream;
-  const audioTrack = currentMicTrack || activeMicStream.getAudioTracks()[0] || null;
-  const videoTrack = screenTrack || stream.getVideoTracks()[0] || null;
-  const senders = pc.getSenders();
-  const hasAudioSender = senders.some((sender) => sender.track && sender.track.kind === 'audio');
-  const hasVideoSender = senders.some((sender) => sender.track && sender.track.kind === 'video');
-
-  // Keep m-line order stable: first audio transceiver, then video transceiver.
-  if (audioTrack && info && info.audioTransceiver) {
-    info.audioTransceiver.direction = 'sendrecv';
-    void info.audioTransceiver.sender.replaceTrack(audioTrack);
-  } else if (audioTrack && !hasAudioSender) {
-    pc.addTrack(audioTrack, activeMicStream);
-  }
-
-  if (videoTrack && info && info.videoTransceiver) {
-    const remoteWantsView = participantViewEnabled.get(info.peerId) !== false;
-    const shouldSendVideo = remoteWantsView && Boolean(screenTrack && screenStream);
-    info.videoTransceiver.direction = getDirection({ send: shouldSendVideo, recv: true });
-    void info.videoTransceiver.sender.replaceTrack(videoTrack);
-  } else if (videoTrack && !hasVideoSender) {
-    pc.addTrack(videoTrack, screenStream || stream);
-  }
-}
-
-function logOfferDiagnostics(peerId, pc, stream) {
-  const trackCount = stream ? stream.getTracks().length : 0;
-  const audioCount = stream ? stream.getAudioTracks().length : 0;
-  const videoCount = stream ? stream.getVideoTracks().length : 0;
-  const senderKinds = pc
-    .getSenders()
-    .map((sender) => (sender.track ? sender.track.kind : 'null'))
-    .join(', ');
-  log(`[webrtc] offerer=${peerId} localTracks(total=${trackCount},audio=${audioCount},video=${videoCount})`);
-  log(`[webrtc] offerer=${peerId} senders=[${senderKinds || 'none'}]`);
-  log(`[webrtc] offerer=${peerId} transceivers=${describeTransceivers(pc) || 'none'}`);
-}
-
-function logSdpDiagnostics(peerId, sdpText, type = 'offer') {
-  const sdp = String(sdpText || '');
-  const hasAudioMLine = /(^|\r?\n)m=audio\s/i.test(sdp);
-  const hasAudioSendDirection = /(^|\r?\n)a=(sendrecv|sendonly)\s*$/im.test(sdp);
-  log(`[webrtc] ${type} sdp check ${peerId}: m=audio=${hasAudioMLine} sendDir=${hasAudioSendDirection}`);
-}
-
-async function flushPendingIceCandidates(info, peerId) {
-  if (!info || !info.pc || !info.pendingCandidates.length) return;
-  const queue = [...info.pendingCandidates];
-  info.pendingCandidates = [];
-  for (const candidate of queue) {
-    try {
-      await info.pc.addIceCandidate(candidate);
-    } catch (err) {
-      log(`[webrtc] ICE flush error ${peerId}: ${err.message || err}`);
-    }
-  }
-}
-
 async function renegotiatePeer(peerId, reason) {
   const info = peers.get(peerId);
   if (!info || !socket) return;
-  if (!info.canInitiateOffer) return;
   if (!info.isNegotiationReady) return;
   const { pc } = info;
   if (info.isMakingOffer || pc.signalingState !== 'stable') return;
-  const stream = await ensureLocalStream();
-  if (!stream) {
-    log(`[webrtc] offer delayed (localStream not ready): ${peerId}`);
-    const infoRetry = peers.get(peerId);
-    if (infoRetry && !infoRetry.retryScheduled) {
-      infoRetry.retryScheduled = true;
-      setTimeout(() => {
-        const latest = peers.get(peerId);
-        if (!latest) return;
-        latest.retryScheduled = false;
-        queueNegotiation(peerId, 'retry-localStream');
-      }, 300);
-    }
-    return;
-  }
-  ensureAudioSendrecv(info);
-  ensureLocalTracks(pc, stream, info);
-  const localAudioTrack = currentMicTrack || (getActiveMicStream() && getActiveMicStream().getAudioTracks()[0]) || null;
-  if (localAudioTrack && info.audioTransceiver && info.audioTransceiver.sender) {
-    try {
-      await info.audioTransceiver.sender.replaceTrack(localAudioTrack);
-    } catch (err) {
-      log(`[webrtc] audio replaceTrack error, delaying offer: ${peerId} (${err.message || err})`);
-      const infoRetry = peers.get(peerId);
-      if (infoRetry && !infoRetry.retryScheduled) {
-        infoRetry.retryScheduled = true;
-        setTimeout(() => {
-          const latest = peers.get(peerId);
-          if (!latest) return;
-          latest.retryScheduled = false;
-          queueNegotiation(peerId, 'retry-audioReplaceTrack');
-        }, 250);
-      }
-      return;
-    }
-  }
-  logOfferDiagnostics(peerId, pc, stream);
-  // HARD GUARD: audio sender gerçekten aktif mi kontrol et
-  const audioSender = (info.audioTransceiver && info.audioTransceiver.sender)
-    || pc.getSenders().find((s) => s.track && s.track.kind === 'audio');
-  if (!audioSender || !audioSender.track) {
-    log(`[webrtc] audio sender not ready, delaying offer: ${peerId}`);
-    const infoRetry = peers.get(peerId);
-    if (infoRetry && !infoRetry.retryScheduled) {
-      infoRetry.retryScheduled = true;
-      setTimeout(() => {
-        const latest = peers.get(peerId);
-        if (!latest) return;
-        latest.retryScheduled = false;
-        queueNegotiation(peerId, 'retry-audioSender');
-      }, 250);
-    }
-    return;
-  }
   info.isMakingOffer = true;
   try {
     await pc.setLocalDescription(await pc.createOffer());
-    logSdpDiagnostics(peerId, pc.localDescription && pc.localDescription.sdp, 'offer');
     socket.emit('signal', { to: peerId, data: pc.localDescription });
     if (reason) log(`Yeniden pazarlık (${reason}): ${peerId}`);
   } catch (err) {
@@ -1958,7 +1816,6 @@ async function renegotiatePeer(peerId, reason) {
 function queueNegotiation(peerId, reason) {
   const info = peers.get(peerId);
   if (!info) return;
-  if (!info.canInitiateOffer) return;
   if (info.negotiationQueued) return;
   info.negotiationQueued = true;
   queueMicrotask(() => {
@@ -1975,7 +1832,7 @@ function applyPeerMediaPolicy(peerId, { renegotiate = false, reason = '' } = {})
   const remoteWantsView = participantViewEnabled.get(peerId) !== false;
 
   if (info.audioTransceiver) {
-    ensureAudioSendrecv(info);
+    info.audioTransceiver.direction = 'sendrecv';
     info.audioTransceiver.sender.replaceTrack(currentMicTrack || null);
   }
 
@@ -2119,7 +1976,6 @@ function cleanupPeer(peerId) {
     // ignore cleanup errors
   }
   removeAudioElement(peerId);
-  remoteAudioStreams.delete(peerId);
   cleanupSpeakingAnalyser(peerId);
   peers.delete(peerId);
   iceLogCounts.delete(`in:${peerId}`);
@@ -2304,10 +2160,8 @@ function ensureSocket() {
       });
     }
     socket.emit('list-rooms');
-    if (pendingJoin && !pendingJoin.sent) {
-      pendingJoin.sent = true;
+    if (pendingJoin) {
       socket.emit('join-room', pendingJoin);
-      log(`[join] join-room sent (connected=${socket.connected}) room=${pendingJoin.roomId}`);
     }
   });
 
@@ -2362,7 +2216,6 @@ function ensureSocket() {
       setStatus('Oda ID gerekli.');
       return;
     }
-    pendingJoin = null;
     currentRoomId = roomId;
     localStorage.setItem(LAST_ROOM_KEY, roomId);
     currentHostId = hostId || null;
@@ -2390,8 +2243,7 @@ function ensureSocket() {
     log(`Kullanıcı listesi alındı: ${peersInRoom.length}`);
 
     peersInRoom.forEach((peer) => {
-      // Yeni katılan istemci (Y) yalnızca answerer olmalı; offer'ı odadakiler üretir.
-      createPeerConnection(peer.id, false);
+      createPeerConnection(peer.id, true);
     });
     sendPresenceUpdate();
     socket.emit('list-rooms');
@@ -2405,8 +2257,7 @@ function ensureSocket() {
     participantViewEnabled.set(id, viewEnabled !== false);
     renderParticipants();
     updateModerationTargets();
-    // Odada zaten olan istemci (X) yeni gelen için offer üretir.
-    createPeerConnection(id, true);
+    createPeerConnection(id, false);
     setStatus([`Yeni katılımcı: ${nickname || id}`, `Oda: ${currentRoomId || '-'}`]);
     log(`Yeni katılımcı: ${nickname || id}`);
     showToast(`${nickname || id} odaya katıldı`, 'success');
@@ -2503,12 +2354,6 @@ function ensureSocket() {
       }
       return;
     }
-    if (!peers.has(clientId)) {
-      // Rejoin senaryosunda sunucu user-joined yerine viewer-updated gönderebilir.
-      // Peer yoksa offerer olarak başlatıp ilk girişte sesin tek yönlü kalmasını önle.
-      createPeerConnection(clientId, true);
-      return;
-    }
     if (clientId !== localClientId && peers.has(clientId)) {
       applyPeerMediaPolicy(clientId, { renegotiate: true, reason: 'viewer-updated' });
     }
@@ -2529,11 +2374,8 @@ function ensureSocket() {
       if (data.type === 'offer') {
         log(`Teklif alındı: ${from}`);
         const offerCollision = info.isMakingOffer || pc.signalingState !== 'stable';
-        info.ignoreOffer = info.canInitiateOffer && offerCollision;
-        if (info.ignoreOffer) {
-          log(`[webrtc] offer ignored (collision, role=offerer): ${from}`);
-          return;
-        }
+        info.ignoreOffer = !info.isPolite && offerCollision;
+        if (info.ignoreOffer) return;
         if (offerCollision) {
           try {
             await pc.setLocalDescription({ type: 'rollback' });
@@ -2542,10 +2384,8 @@ function ensureSocket() {
           }
         }
         await pc.setRemoteDescription(data);
-        await flushPendingIceCandidates(info, from);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        logSdpDiagnostics(from, pc.localDescription && pc.localDescription.sdp, 'answer');
         socket.emit('signal', { to: from, data: pc.localDescription });
         info.isNegotiationReady = true;
         log(`Yanıt gönderildi: ${from}`);
@@ -2553,20 +2393,20 @@ function ensureSocket() {
         log(`Yanıt alındı: ${from}`);
         await pc.setRemoteDescription(data);
         info.isNegotiationReady = true;
-        await flushPendingIceCandidates(info, from);
+        if (info.pendingCandidates.length > 0) {
+          for (const candidate of info.pendingCandidates) {
+            await pc.addIceCandidate(candidate);
+          }
+          info.pendingCandidates = [];
+        }
       } else if (data.candidate) {
         const receivedCount = (iceLogCounts.get(`in:${from}`) || 0) + 1;
         iceLogCounts.set(`in:${from}`, receivedCount);
         if (receivedCount <= 1) log(`ICE candidate alındı: ${from}`);
         if (pc.remoteDescription) {
-          try {
-            await pc.addIceCandidate(data);
-          } catch (err) {
-            log(`[webrtc] ICE add error ${from}: ${err.message || err}`);
-          }
+          await pc.addIceCandidate(data);
         } else {
           info.pendingCandidates.push(data);
-          if (receivedCount <= 3) log(`[webrtc] ICE queued (remoteDescription yok): ${from}`);
         }
       }
     } catch (err) {
@@ -2583,24 +2423,19 @@ function createPeerConnection(peerId, shouldCreateOffer) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   const info = {
     pc,
-    peerId,
     audioEl: createAudioElement(peerId),
     pendingCandidates: [],
     isMakingOffer: false,
+    isPolite: localClientId.localeCompare(peerId) > 0,
     ignoreOffer: false,
     negotiationQueued: false,
     isNegotiationReady: false,
-    retryScheduled: false,
-    canInitiateOffer: Boolean(shouldCreateOffer),
     audioTransceiver: null,
     videoTransceiver: null
   };
-  log(`[webrtc] peer role ${peerId}: ${info.canInitiateOffer ? 'offerer' : 'answerer'}`);
 
-  // m-line sırası sabit olmalı: önce audio, sonra video.
   info.audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
   info.videoTransceiver = pc.addTransceiver('video', { direction: 'recvonly' });
-  log(`[webrtc] transceivers init ${peerId}: ${describeTransceivers(pc)}`);
 
   pc.onicecandidate = (event) => {
     if (!event.candidate) return;
@@ -2626,18 +2461,10 @@ function createPeerConnection(peerId, shouldCreateOffer) {
       return;
     }
     if (stream) {
-      remoteAudioStreams.set(peerId, stream);
       info.audioEl.srcObject = stream;
     } else {
       const fallback = new MediaStream([event.track]);
-      remoteAudioStreams.set(peerId, fallback);
       info.audioEl.srcObject = fallback;
-    }
-    const playPromise = info.audioEl.play();
-    if (playPromise && typeof playPromise.catch === 'function') {
-      playPromise.catch((err) => {
-        log(`[webrtc] remote audio play error ${peerId}: ${err.message || err}`);
-      });
     }
     ensureSpeakingAnalyser(peerId);
     applyRemoteAudioSettings(peerId);
@@ -2659,7 +2486,6 @@ function createPeerConnection(peerId, shouldCreateOffer) {
 
   pc.onnegotiationneeded = () => {
     if (!info.isNegotiationReady) return;
-    if (!info.canInitiateOffer) return;
     queueNegotiation(peerId, 'negotiationneeded');
   };
 
@@ -2692,7 +2518,7 @@ async function startJoinFlow(roomId) {
 
   currentRoomId = clean;
   manualLeave = false;
-  pendingJoin = { roomId: clean, nickname: currentNickname, clientId: localClientId, sent: false };
+  pendingJoin = { roomId: clean, nickname: currentNickname, clientId: localClientId };
   setUiState({ inRoom: true });
   setStatus([`Bağlanılıyor...`, `Oda: ${currentRoomId}`]);
 
@@ -2705,10 +2531,8 @@ async function startJoinFlow(roomId) {
     setStatus('Bağlantı kurulamadı. Socket istemcisi yüklenemedi.');
     return;
   }
-  if (s.connected && pendingJoin && !pendingJoin.sent) {
-    pendingJoin.sent = true;
+  if (s.connected) {
     s.emit('join-room', pendingJoin);
-    log(`[join] join-room sent (connected=${socket.connected}) room=${pendingJoin.roomId}`);
   }
 }
 
