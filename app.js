@@ -316,6 +316,7 @@ const PRESENCE_PREFIX = '__PRESENCE__';
 const speakerAnalysers = new Map(); // peerId -> { analyser, data, sourceNode, lastSpokeAt, speaking }
 const peerDisconnectTimers = new Map(); // peerId -> timeoutId
 const PEER_DISCONNECT_GRACE_MS = 12000;
+const NEGOTIATION_DEBOUNCE_MS = 100;
 let speakerLoopRunning = false;
 let lastSpeakerCheck = 0;
 let micAnalyser = null;
@@ -1828,15 +1829,31 @@ async function renegotiatePeer(peerId, reason) {
   if (!info || !socket) return;
   if (!info.isNegotiationReady) return;
   const { pc } = info;
-  if (info.isMakingOffer || pc.signalingState !== 'stable') return;
+  if (pc.signalingState !== 'stable') return;
+  if (info.isNegotiating || info.isMakingOffer) return;
+  const token = (info.negotiationToken || 0) + 1;
+  info.negotiationToken = token;
+  info.isNegotiating = true;
   info.isMakingOffer = true;
   try {
-    await pc.setLocalDescription(await pc.createOffer());
+    const latest = peers.get(peerId);
+    if (!latest || latest !== info) return;
+    if (pc.signalingState !== 'stable') return;
+
+    const offer = await pc.createOffer();
+    if (info.negotiationToken !== token) return;
+    if (pc.signalingState !== 'stable') return;
+
+    await pc.setLocalDescription(offer);
+    if (info.negotiationToken !== token) return;
+    if (!socket || !pc.localDescription) return;
+
     socket.emit('signal', { to: peerId, data: pc.localDescription });
     if (reason) log(`Yeniden pazarlık (${reason}): ${peerId}`);
   } catch (err) {
     log(`Yeniden pazarlık hatası ${peerId}: ${err.message || err}`);
   } finally {
+    info.isNegotiating = false;
     info.isMakingOffer = false;
   }
 }
@@ -1876,14 +1893,27 @@ async function flushPendingCandidates(info, pc, peerId, reason) {
 function queueNegotiation(peerId, reason) {
   const info = peers.get(peerId);
   if (!info) return;
-  if (info.negotiationQueued) return;
   info.negotiationQueued = true;
-  queueMicrotask(() => {
+  if (reason) {
+    info.pendingNegotiationReason = reason;
+  }
+  if (info.negotiationDebounceTimer) {
+    clearTimeout(info.negotiationDebounceTimer);
+  }
+  info.negotiationDebounceTimer = setTimeout(() => {
     const latest = peers.get(peerId);
     if (!latest) return;
+    latest.negotiationDebounceTimer = null;
     latest.negotiationQueued = false;
-    renegotiatePeer(peerId, reason);
-  });
+    if (latest.pc.signalingState === 'closed') return;
+    if (latest.isNegotiating || latest.isMakingOffer || latest.pc.signalingState !== 'stable') {
+      queueNegotiation(peerId, latest.pendingNegotiationReason || reason || 'negotiation-retry');
+      return;
+    }
+    const nextReason = latest.pendingNegotiationReason || reason;
+    latest.pendingNegotiationReason = '';
+    void renegotiatePeer(peerId, nextReason);
+  }, NEGOTIATION_DEBOUNCE_MS);
 }
 
 function applyPeerMediaPolicy(peerId, { renegotiate = false, reason = '' } = {}) {
@@ -2043,9 +2073,24 @@ function cleanupPeer(peerId) {
     clearTimeout(disconnectTimer);
     peerDisconnectTimers.delete(peerId);
   }
+  if (info.negotiationDebounceTimer) {
+    clearTimeout(info.negotiationDebounceTimer);
+    info.negotiationDebounceTimer = null;
+  }
+  info.pendingNegotiationReason = '';
+  info.negotiationQueued = false;
+  info.isNegotiationReady = false;
+  info.isNegotiating = false;
+  info.isMakingOffer = false;
   try {
+    if (info.videoTransceiver && info.videoTransceiver.sender) {
+      info.videoTransceiver.sender.replaceTrack(null).catch(() => { });
+    }
     info.pc.onicecandidate = null;
     info.pc.ontrack = null;
+    info.pc.onnegotiationneeded = null;
+    info.pc.onconnectionstatechange = null;
+    info.pc.oniceconnectionstatechange = null;
     info.pc.close();
   } catch (_) {
     // ignore cleanup errors
@@ -2499,7 +2544,7 @@ function ensureSocket() {
     try {
       if (data.type === 'offer') {
         log(`Teklif alındı: ${from}`);
-        const offerCollision = info.isMakingOffer || pc.signalingState !== 'stable';
+        const offerCollision = info.isNegotiating || info.isMakingOffer || pc.signalingState !== 'stable';
         info.ignoreOffer = !info.isPolite && offerCollision;
         if (info.ignoreOffer) return;
         if (offerCollision) {
@@ -2540,17 +2585,29 @@ function ensureSocket() {
 }
 
 function createPeerConnection(peerId, shouldCreateOffer) {
-  if (peers.has(peerId)) return peers.get(peerId);
+  if (peers.has(peerId)) {
+    const existing = peers.get(peerId);
+    const state = existing && existing.pc ? existing.pc.connectionState : 'closed';
+    if (state === 'connected' || state === 'connecting') {
+      return existing;
+    }
+    log(`Aynı peer yeniden bağlandı, eski bağlantı force-close ediliyor: ${peerId}`);
+    cleanupPeer(peerId);
+  }
 
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   const info = {
     pc,
     audioEl: createAudioElement(peerId),
     pendingCandidates: [],
+    isNegotiating: false,
     isMakingOffer: false,
     isPolite: localClientId.localeCompare(peerId) > 0,
     ignoreOffer: false,
     negotiationQueued: false,
+    pendingNegotiationReason: '',
+    negotiationDebounceTimer: null,
+    negotiationToken: 0,
     isNegotiationReady: false,
     audioTransceiver: null,
     videoTransceiver: null
@@ -2636,7 +2693,11 @@ function createPeerConnection(peerId, shouldCreateOffer) {
 
   pc.onnegotiationneeded = () => {
     if (!info.isNegotiationReady) return;
-    queueNegotiation(peerId, 'negotiationneeded');
+    try {
+      queueNegotiation(peerId, 'negotiationneeded');
+    } catch (err) {
+      log(`negotiationneeded hatası ${peerId}: ${err.message || err}`);
+    }
   };
 
   peers.set(peerId, info);
