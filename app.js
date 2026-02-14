@@ -174,7 +174,11 @@ if (els.serverUrlInput) {
   els.serverUrlInput.value = SIGNALING_URL;
 }
 
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' }
+];
 
 let socket = null;
 let currentRoomId = null;
@@ -310,6 +314,8 @@ const participantViewEnabled = new Map(); // id -> viewEnabled
 const participantPresence = new Map(); // id -> { muted, speakerMuted, listenOnly, updatedAt }
 const PRESENCE_PREFIX = '__PRESENCE__';
 const speakerAnalysers = new Map(); // peerId -> { analyser, data, sourceNode, lastSpokeAt, speaking }
+const peerDisconnectTimers = new Map(); // peerId -> timeoutId
+const PEER_DISCONNECT_GRACE_MS = 12000;
 let speakerLoopRunning = false;
 let lastSpeakerCheck = 0;
 let micAnalyser = null;
@@ -1389,17 +1395,18 @@ function updateModerationTargets() {
 function updateModerationUI() {
   const isHost = Boolean(currentHostId && localClientId === currentHostId);
   const canModerate = isHost || isPrivilegedNickname(currentNickname);
+  const canRefreshConnections = Boolean(currentRoomId);
   if (els.muteOtherBtn) els.muteOtherBtn.disabled = !canModerate;
   if (els.unmuteOtherBtn) els.unmuteOtherBtn.disabled = !canModerate;
   if (els.kickBtn) els.kickBtn.disabled = !canModerate;
   if (els.banBtn) els.banBtn.disabled = !canModerate;
   if (els.slowModeBtn) els.slowModeBtn.disabled = !canModerate;
-  if (els.softRefreshBtn) els.softRefreshBtn.disabled = !canModerate;
-  if (els.hardRefreshBtn) els.hardRefreshBtn.disabled = !canModerate;
+  if (els.softRefreshBtn) els.softRefreshBtn.disabled = !canRefreshConnections;
+  if (els.hardRefreshBtn) els.hardRefreshBtn.disabled = !canRefreshConnections;
   if (els.moderationTarget) els.moderationTarget.disabled = !canModerate;
   if (els.slowModeSelect) els.slowModeSelect.disabled = !canModerate;
   if (els.moderationPanel) {
-    els.moderationPanel.style.display = canModerate ? 'block' : 'none';
+    els.moderationPanel.style.display = 'block';
   }
 }
 
@@ -1834,6 +1841,24 @@ async function renegotiatePeer(peerId, reason) {
   }
 }
 
+async function tryIceRestart(peerId, reason = 'ice-restart') {
+  const info = peers.get(peerId);
+  if (!info || !socket) return;
+  if (!info.isNegotiationReady) return;
+  const { pc } = info;
+  if (info.isMakingOffer || pc.signalingState !== 'stable') return;
+  info.isMakingOffer = true;
+  try {
+    await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+    socket.emit('signal', { to: peerId, data: pc.localDescription });
+    log(`ICE restart teklifi gönderildi (${reason}): ${peerId}`);
+  } catch (err) {
+    log(`ICE restart hatası ${peerId}: ${err.message || err}`);
+  } finally {
+    info.isMakingOffer = false;
+  }
+}
+
 async function flushPendingCandidates(info, pc, peerId, reason) {
   if (!info || !pc) return;
   const queue = Array.isArray(info.pendingCandidates) ? info.pendingCandidates : [];
@@ -1995,6 +2020,16 @@ function createAudioElement(peerId) {
   return audio;
 }
 
+function ensureAudioPlayback(audio, peerId) {
+  if (!audio || typeof audio.play !== 'function') return;
+  const playPromise = audio.play();
+  if (playPromise && typeof playPromise.catch === 'function') {
+    playPromise.catch((err) => {
+      log(`Ses otomatik başlatılamadı (${peerId}): ${err && err.message ? err.message : err}`);
+    });
+  }
+}
+
 function removeAudioElement(peerId) {
   const audio = audioContainer.querySelector(`audio[data-peer-id="${peerId}"]`);
   if (audio) audio.remove();
@@ -2003,6 +2038,11 @@ function removeAudioElement(peerId) {
 function cleanupPeer(peerId) {
   const info = peers.get(peerId);
   if (!info) return;
+  const disconnectTimer = peerDisconnectTimers.get(peerId);
+  if (disconnectTimer) {
+    clearTimeout(disconnectTimer);
+    peerDisconnectTimers.delete(peerId);
+  }
   try {
     info.pc.onicecandidate = null;
     info.pc.ontrack = null;
@@ -2549,13 +2589,40 @@ function createPeerConnection(peerId, shouldCreateOffer) {
       const fallback = new MediaStream([event.track]);
       info.audioEl.srcObject = fallback;
     }
+    ensureAudioPlayback(info.audioEl, peerId);
     ensureSpeakingAnalyser(peerId);
     applyRemoteAudioSettings(peerId);
   };
 
   pc.onconnectionstatechange = () => {
     log(`PC durumu ${peerId}: ${pc.connectionState}`);
-    if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+    if (pc.connectionState === 'connected') {
+      const disconnectTimer = peerDisconnectTimers.get(peerId);
+      if (disconnectTimer) {
+        clearTimeout(disconnectTimer);
+        peerDisconnectTimers.delete(peerId);
+      }
+      return;
+    }
+    if (pc.connectionState === 'disconnected') {
+      if (peerDisconnectTimers.has(peerId)) return;
+      const timer = setTimeout(() => {
+        peerDisconnectTimers.delete(peerId);
+        const latest = peers.get(peerId);
+        if (!latest) return;
+        const latestState = latest.pc.connectionState;
+        if (latestState === 'disconnected' || latestState === 'failed') {
+          void tryIceRestart(peerId, 'disconnected-timeout');
+        }
+      }, PEER_DISCONNECT_GRACE_MS);
+      peerDisconnectTimers.set(peerId, timer);
+      return;
+    }
+    if (pc.connectionState === 'failed') {
+      void tryIceRestart(peerId, 'connection-failed');
+      return;
+    }
+    if (pc.connectionState === 'closed') {
       cleanupPeer(peerId);
       participants.delete(peerId);
       renderParticipants();
