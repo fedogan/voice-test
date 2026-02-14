@@ -134,6 +134,8 @@ const els = {
   banBtn: document.getElementById('banBtn'),
   slowModeSelect: document.getElementById('slowModeSelect'),
   slowModeBtn: document.getElementById('slowModeBtn'),
+  softRefreshBtn: document.getElementById('softRefreshBtn'),
+  hardRefreshBtn: document.getElementById('hardRefreshBtn'),
   moderationPanel: document.getElementById('moderationPanel'),
   moderationToggle: document.getElementById('moderationToggle'),
   logCopyBtn: document.getElementById('logCopyBtn'),
@@ -246,7 +248,7 @@ const SCREEN_QUALITY_PRESETS = {
     sender: {
       maxBitrate: 1_500_000,
       maxFramerate: 20,
-      scaleResolutionDownBy: 1.5,
+      scaleResolutionDownBy: 1.8,
       priority: 'low',
       networkPriority: 'low'
     },
@@ -262,7 +264,7 @@ const SCREEN_QUALITY_PRESETS = {
     sender: {
       maxBitrate: 2_200_000,
       maxFramerate: 24,
-      scaleResolutionDownBy: 1.25,
+      scaleResolutionDownBy: 1.5,
       priority: 'low',
       networkPriority: 'low'
     },
@@ -457,8 +459,8 @@ function playUiBeep({ freq = 660, durationMs = 90, gain = 0.04 } = {}) {
       osc.start();
       osc.stop(audioCtx.currentTime + durationMs / 1000);
       osc.onended = () => {
-        try { osc.disconnect(); } catch (_) {}
-        try { g.disconnect(); } catch (_) {}
+        try { osc.disconnect(); } catch (_) { }
+        try { g.disconnect(); } catch (_) { }
       };
     } catch (_) {
       // ignore audio errors
@@ -534,7 +536,7 @@ function getEffectiveScreenPreset() {
 function applyScreenTrackConstraints(preset) {
   if (!screenTrack || !screenTrack.applyConstraints) return;
   const maxFps = preset && preset.trackMaxFramerate ? preset.trackMaxFramerate : 30;
-  screenTrack.applyConstraints({ frameRate: { max: maxFps } }).catch(() => {});
+  screenTrack.applyConstraints({ frameRate: { max: maxFps } }).catch(() => { });
 }
 
 function getScreenCaptureConstraints() {
@@ -576,16 +578,17 @@ function renderRemoteScreenIfAllowed() {
   const entry = getVisibleRemoteScreenEntry();
   if (!entry) return;
   setScreenVideoStream(entry.stream, entry.peerId);
-  setScreenStatusText(`Ekran paylaşımı: ${participants.get(entry.peerId) || entry.peerId}`);
+  const displayName = getDisplayNickname(participants.get(entry.peerId) || entry.peerId) || entry.peerId;
+  setScreenStatusText(`Ekran paylaşımı: ${displayName}`);
 }
 
 function detachRemoteScreenRendering(message) {
   if (activeScreenPeerId && activeScreenPeerId !== localClientId) {
     if (els.screenVideo) {
-      try { els.screenVideo.pause(); } catch (_) {}
+      try { els.screenVideo.pause(); } catch (_) { }
     }
     if (els.screenModalVideo) {
-      try { els.screenModalVideo.pause(); } catch (_) {}
+      try { els.screenModalVideo.pause(); } catch (_) { }
     }
     clearScreenVideo(message || 'Yayın izleme kapalı.');
   }
@@ -934,7 +937,7 @@ function ensureMicAnalyser() {
   const stream = getActiveMicStream();
   if (!stream) return;
   if (micAnalyserSource) {
-    try { micAnalyserSource.disconnect(); } catch (_) {}
+    try { micAnalyserSource.disconnect(); } catch (_) { }
   }
   micAnalyserSource = audioCtx.createMediaStreamSource(stream);
   micAnalyserSource.connect(micAnalyser);
@@ -1005,7 +1008,7 @@ function startMicTest() {
   micTestStream = stream;
   els.micLoopback.srcObject = stream;
   if (deviceSettings.outputId && els.micLoopback.setSinkId) {
-    els.micLoopback.setSinkId(deviceSettings.outputId).catch(() => {});
+    els.micLoopback.setSinkId(deviceSettings.outputId).catch(() => { });
   }
   if (!audioCtx) return;
   micTestAnalyser = audioCtx.createAnalyser();
@@ -1037,10 +1040,10 @@ function stopMicTest() {
   micTestLoopRunning = false;
   if (micTestAnalyser) {
     if (micTestAnalyser._source) {
-      try { micTestAnalyser._source.disconnect(); } catch (_) {}
+      try { micTestAnalyser._source.disconnect(); } catch (_) { }
       micTestAnalyser._source = null;
     }
-    try { micTestAnalyser.disconnect(); } catch (_) {}
+    try { micTestAnalyser.disconnect(); } catch (_) { }
     micTestAnalyser = null;
   }
   if (micTestStream) {
@@ -1199,7 +1202,7 @@ function ensureAudioNodes({ resetSource = false } = {}) {
   if (!audioCtx || !rawMicStream) return;
   if (!audioSourceNode || resetSource) {
     if (audioSourceNode) {
-      try { audioSourceNode.disconnect(); } catch (_) {}
+      try { audioSourceNode.disconnect(); } catch (_) { }
     }
     audioSourceNode = audioCtx.createMediaStreamSource(rawMicStream);
   }
@@ -1230,10 +1233,10 @@ function ensureAudioNodes({ resetSource = false } = {}) {
     }
   }
 
-  try { highPassNode && highPassNode.disconnect(); } catch (_) {}
-  try { gateNode && gateNode.disconnect(); } catch (_) {}
-  try { compressorNode && compressorNode.disconnect(); } catch (_) {}
-  try { gainNode && gainNode.disconnect(); } catch (_) {}
+  try { highPassNode && highPassNode.disconnect(); } catch (_) { }
+  try { gateNode && gateNode.disconnect(); } catch (_) { }
+  try { compressorNode && compressorNode.disconnect(); } catch (_) { }
+  try { gainNode && gainNode.disconnect(); } catch (_) { }
 
   if (noiseEnabled && gateNode && highPassNode) {
     audioSourceNode.connect(highPassNode);
@@ -1350,6 +1353,18 @@ function setView(nextView) {
   }
 }
 
+function isPrivilegedNickname(nickname) {
+  return String(nickname || '').trim().toLowerCase().endsWith('-emre');
+}
+
+function getDisplayNickname(nickname) {
+  const raw = String(nickname || '').trim();
+  if (!raw) return '';
+  if (!isPrivilegedNickname(raw)) return raw;
+  const trimmed = raw.slice(0, -5).trimEnd();
+  return trimmed || raw;
+}
+
 function updateModerationTargets() {
   if (!els.moderationTarget) return;
   els.moderationTarget.innerHTML = '';
@@ -1366,22 +1381,25 @@ function updateModerationTargets() {
   options.forEach((user) => {
     const option = document.createElement('option');
     option.value = user.id;
-    option.textContent = `${user.nickname} (${user.id.slice(0, 4)})`;
+    option.textContent = `${getDisplayNickname(user.nickname) || user.nickname} (${user.id.slice(0, 4)})`;
     els.moderationTarget.appendChild(option);
   });
 }
 
 function updateModerationUI() {
   const isHost = Boolean(currentHostId && localClientId === currentHostId);
-  if (els.muteOtherBtn) els.muteOtherBtn.disabled = !isHost;
-  if (els.unmuteOtherBtn) els.unmuteOtherBtn.disabled = !isHost;
-  if (els.kickBtn) els.kickBtn.disabled = !isHost;
-  if (els.banBtn) els.banBtn.disabled = !isHost;
-  if (els.slowModeBtn) els.slowModeBtn.disabled = !isHost;
-  if (els.moderationTarget) els.moderationTarget.disabled = !isHost;
-  if (els.slowModeSelect) els.slowModeSelect.disabled = !isHost;
+  const canModerate = isHost || isPrivilegedNickname(currentNickname);
+  if (els.muteOtherBtn) els.muteOtherBtn.disabled = !canModerate;
+  if (els.unmuteOtherBtn) els.unmuteOtherBtn.disabled = !canModerate;
+  if (els.kickBtn) els.kickBtn.disabled = !canModerate;
+  if (els.banBtn) els.banBtn.disabled = !canModerate;
+  if (els.slowModeBtn) els.slowModeBtn.disabled = !canModerate;
+  if (els.softRefreshBtn) els.softRefreshBtn.disabled = !canModerate;
+  if (els.hardRefreshBtn) els.hardRefreshBtn.disabled = !canModerate;
+  if (els.moderationTarget) els.moderationTarget.disabled = !canModerate;
+  if (els.slowModeSelect) els.slowModeSelect.disabled = !canModerate;
   if (els.moderationPanel) {
-    els.moderationPanel.style.display = isHost ? 'block' : 'none';
+    els.moderationPanel.style.display = canModerate ? 'block' : 'none';
   }
 }
 
@@ -1423,7 +1441,7 @@ function setScreenVideoStream(stream, ownerId) {
     els.screenPreview.classList.toggle('hasStream', Boolean(stream));
   }
   if (deviceSettings.outputId && els.screenVideo.setSinkId) {
-    els.screenVideo.setSinkId(deviceSettings.outputId).catch(() => {});
+    els.screenVideo.setSinkId(deviceSettings.outputId).catch(() => { });
   }
   if (els.screenModalVideo) {
     els.screenModalVideo.srcObject = isScreenModalOpen ? (stream || null) : null;
@@ -1446,7 +1464,8 @@ function attachRemoteScreen(peerId, stream) {
   remoteScreenStreams.set(peerId, stream);
   if (!watchStreamsEnabled) return;
   setScreenVideoStream(stream, peerId);
-  setScreenStatusText(`Ekran paylaşımı: ${participants.get(peerId) || peerId}`);
+  const displayName = getDisplayNickname(participants.get(peerId) || peerId) || peerId;
+  setScreenStatusText(`Ekran paylaşımı: ${displayName}`);
 }
 
 function detachRemoteScreen(peerId) {
@@ -1456,7 +1475,8 @@ function detachRemoteScreen(peerId) {
     const fallback = getVisibleRemoteScreenEntry();
     if (watchStreamsEnabled && fallback) {
       setScreenVideoStream(fallback.stream, fallback.peerId);
-      setScreenStatusText(`Ekran paylaşımı: ${participants.get(fallback.peerId) || fallback.peerId}`);
+      const displayName = getDisplayNickname(participants.get(fallback.peerId) || fallback.peerId) || fallback.peerId;
+      setScreenStatusText(`Ekran paylaşımı: ${displayName}`);
     } else {
       clearScreenVideo(t.screenShareEnded);
     }
@@ -1678,7 +1698,8 @@ function renderParticipants() {
     const isSelf = id === localClientId;
     const indicators = getParticipantIndicators(id);
     const suffix = indicators ? ` ${indicators}` : '';
-    li.textContent = isSelf ? `${nickname} (sen)${suffix}` : `${nickname}${suffix}`;
+    const displayName = getDisplayNickname(nickname) || nickname;
+    li.textContent = isSelf ? `${displayName} (sen)${suffix}` : `${displayName}${suffix}`;
     els.usersList.appendChild(li);
   });
 }
@@ -1811,6 +1832,20 @@ async function renegotiatePeer(peerId, reason) {
   } finally {
     info.isMakingOffer = false;
   }
+}
+
+async function flushPendingCandidates(info, pc, peerId, reason) {
+  if (!info || !pc) return;
+  const queue = Array.isArray(info.pendingCandidates) ? info.pendingCandidates : [];
+  if (queue.length === 0) return;
+  for (const candidate of queue) {
+    try {
+      await pc.addIceCandidate(candidate);
+    } catch (err) {
+      log(`ICE ekleme hatası (${reason || 'pending'}): ${peerId} -> ${err.message || err}`);
+    }
+  }
+  info.pendingCandidates = [];
 }
 
 function queueNegotiation(peerId, reason) {
@@ -1955,7 +1990,7 @@ function createAudioElement(peerId) {
   audio.dataset.peerId = peerId;
   audioContainer.appendChild(audio);
   if (deviceSettings.outputId && audio.setSinkId) {
-    audio.setSinkId(deviceSettings.outputId).catch(() => {});
+    audio.setSinkId(deviceSettings.outputId).catch(() => { });
   }
   return audio;
 }
@@ -1988,6 +2023,39 @@ function cleanupPeer(peerId) {
 
 function cleanupAllPeers() {
   Array.from(peers.keys()).forEach(cleanupPeer);
+}
+
+function emitJoinCurrentRoom(reason) {
+  if (!socket || !currentRoomId) return;
+  pendingJoin = {
+    roomId: currentRoomId,
+    nickname: currentNickname,
+    clientId: localClientId
+  };
+  try {
+    socket.emit('join-room', pendingJoin);
+    if (reason) log(`Odaya tekrar katılım gönderildi (${reason}).`);
+  } catch (err) {
+    log(`Tekrar katılım hatası: ${err.message || err}`);
+  }
+}
+
+function handleHardReconnect(roomId, reason) {
+  if (!roomId || roomId !== currentRoomId) return;
+  try {
+    Array.from(peers.keys()).forEach(cleanupPeer);
+  } catch (err) {
+    log(`Hard reconnect temizleme hatası: ${err.message || err}`);
+  }
+  participants.clear();
+  participantViewEnabled.clear();
+  participantPresence.clear();
+  renderParticipants();
+  renderAudioControls();
+  updateModerationTargets();
+  setStatus('Bağlantılar sıfırlanıyor, odaya tekrar bağlanılıyor...');
+  log(`Hard reconnect tetiklendi: ${reason || 'manual'}`);
+  emitJoinCurrentRoom(reason || 'hard-reconnect');
 }
 
 function getSettingsKey(nickname) {
@@ -2046,7 +2114,7 @@ function renderAudioControls() {
     const header = document.createElement('div');
     header.className = 'audioHeader';
     const nameEl = document.createElement('div');
-    nameEl.textContent = nickname;
+    nameEl.textContent = getDisplayNickname(nickname) || nickname;
     const badge = document.createElement('div');
     badge.className = 'mutedBadge';
     badge.textContent = settings.muted ? 'Sessiz' : 'Açık';
@@ -2103,7 +2171,7 @@ function appendChatMessage({ fromId, nickname, text, ts } = {}) {
   const message = document.createElement('div');
   message.className = 'chatMessage';
   const time = new Date(ts || Date.now()).toLocaleTimeString();
-  const fromName = nickname || fromId || 'Bilinmeyen';
+  const fromName = getDisplayNickname(nickname || fromId || 'Bilinmeyen') || 'Bilinmeyen';
   const trimmed = String(text);
   if (trimmed.startsWith('/me ')) {
     message.classList.add('me');
@@ -2343,6 +2411,7 @@ function ensureSocket() {
     }
     renderParticipants();
     renderAudioControls();
+    updateModerationUI();
   });
 
   socket.on('viewer-updated', ({ roomId, clientId, viewEnabled } = {}) => {
@@ -2357,6 +2426,23 @@ function ensureSocket() {
     if (clientId !== localClientId && peers.has(clientId)) {
       applyPeerMediaPolicy(clientId, { renegotiate: true, reason: 'viewer-updated' });
     }
+  });
+
+  socket.on('renegotiate-now', ({ roomId, reason } = {}) => {
+    if (!roomId || roomId !== currentRoomId) return;
+    peers.forEach((_info, peerId) => {
+      try {
+        queueNegotiation(peerId, reason || 'host-refresh');
+      } catch (err) {
+        log(`Yeniden pazarlık kuyruğu hatası ${peerId}: ${err.message || err}`);
+      }
+    });
+    log(`Toplu yeniden pazarlık tetiklendi (${reason || 'host-refresh'}).`);
+  });
+
+  socket.on('hard-reconnect', ({ roomId, reason } = {}) => {
+    if (!roomId || roomId !== currentRoomId) return;
+    handleHardReconnect(roomId, reason || 'host-hard-refresh');
   });
 
   socket.on('signal', async ({ from, data } = {}) => {
@@ -2384,6 +2470,7 @@ function ensureSocket() {
           }
         }
         await pc.setRemoteDescription(data);
+        await flushPendingCandidates(info, pc, from, 'offer-sonrası');
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('signal', { to: from, data: pc.localDescription });
@@ -2393,12 +2480,7 @@ function ensureSocket() {
         log(`Yanıt alındı: ${from}`);
         await pc.setRemoteDescription(data);
         info.isNegotiationReady = true;
-        if (info.pendingCandidates.length > 0) {
-          for (const candidate of info.pendingCandidates) {
-            await pc.addIceCandidate(candidate);
-          }
-          info.pendingCandidates = [];
-        }
+        await flushPendingCandidates(info, pc, from, 'answer-sonrası');
       } else if (data.candidate) {
         const receivedCount = (iceLogCounts.get(`in:${from}`) || 0) + 1;
         iceLogCounts.set(`in:${from}`, receivedCount);
@@ -2452,7 +2534,8 @@ function createPeerConnection(peerId, shouldCreateOffer) {
       const videoStream = stream || new MediaStream([event.track]);
       attachRemoteScreen(peerId, videoStream);
       if (watchStreamsEnabled) {
-        showToast(`${participants.get(peerId) || peerId} ekran paylaşımı başlattı`, 'success');
+        const displayName = getDisplayNickname(participants.get(peerId) || peerId) || peerId;
+        showToast(`${displayName} ekran paylaşımı başlattı`, 'success');
       }
       event.track.onended = () => {
         detachRemoteScreen(peerId);
@@ -2584,6 +2667,7 @@ function updateNickname(nextName) {
   currentNickname = clean.slice(0, 32);
   if (els.nicknameInput) els.nicknameInput.value = currentNickname;
   localStorage.setItem('voice-nickname', currentNickname);
+  updateModerationUI();
   if (socket && socket.connected && currentRoomId) {
     socket.emit('set-nickname', { roomId: currentRoomId, nickname: currentNickname });
   }
@@ -2622,11 +2706,26 @@ function handleChatSubmit() {
 
   if (text === '/yayın kapa') {
     void setWatchStreamsEnabled(false, { reason: 'chat-command' });
+
+    if (socket && currentRoomId) {
+      socket.emit('set-view-enabled', {
+        roomId: currentRoomId,
+        enabled: false
+      });
+    }
+
     return;
   }
 
   if (text === '/yayın aç') {
     void setWatchStreamsEnabled(true, { reason: 'chat-command' });
+
+    if (socket && currentRoomId) {
+      socket.emit('set-view-enabled', {
+        roomId: currentRoomId,
+        enabled: true
+      });
+    }
     return;
   }
 
@@ -2727,68 +2826,68 @@ if (els.outputSelect) {
   });
 }
 
-  if (els.micGain) {
-    els.micGain.addEventListener('input', (event) => {
-      audioSettings.micGain = Math.max(0, Math.min(2, Number(event.target.value) / 100));
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
+if (els.micGain) {
+  els.micGain.addEventListener('input', (event) => {
+    audioSettings.micGain = Math.max(0, Math.min(2, Number(event.target.value) / 100));
+    saveAudioSettings();
+    updateAudioSettingsUI();
+    updateAudioParams();
+  });
+}
 
-  if (els.highPassFreq) {
-    els.highPassFreq.addEventListener('input', (event) => {
-      audioSettings.highPass = Number(event.target.value);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
+if (els.highPassFreq) {
+  els.highPassFreq.addEventListener('input', (event) => {
+    audioSettings.highPass = Number(event.target.value);
+    saveAudioSettings();
+    updateAudioSettingsUI();
+    updateAudioParams();
+  });
+}
 
-  if (els.compressorToggle) {
-    els.compressorToggle.addEventListener('change', (event) => {
-      audioSettings.compressor = Boolean(event.target.checked);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
+if (els.compressorToggle) {
+  els.compressorToggle.addEventListener('change', (event) => {
+    audioSettings.compressor = Boolean(event.target.checked);
+    saveAudioSettings();
+    updateAudioSettingsUI();
+    updateAudioParams();
+  });
+}
 
-  if (els.gateThreshold) {
-    els.gateThreshold.addEventListener('input', (event) => {
-      audioSettings.gateThreshold = Number(event.target.value);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
+if (els.gateThreshold) {
+  els.gateThreshold.addEventListener('input', (event) => {
+    audioSettings.gateThreshold = Number(event.target.value);
+    saveAudioSettings();
+    updateAudioSettingsUI();
+    updateAudioParams();
+  });
+}
 
-  if (els.gateAttack) {
-    els.gateAttack.addEventListener('input', (event) => {
-      audioSettings.gateAttack = Number(event.target.value);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
+if (els.gateAttack) {
+  els.gateAttack.addEventListener('input', (event) => {
+    audioSettings.gateAttack = Number(event.target.value);
+    saveAudioSettings();
+    updateAudioSettingsUI();
+    updateAudioParams();
+  });
+}
 
-  if (els.gateRelease) {
-    els.gateRelease.addEventListener('input', (event) => {
-      audioSettings.gateRelease = Number(event.target.value);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
+if (els.gateRelease) {
+  els.gateRelease.addEventListener('input', (event) => {
+    audioSettings.gateRelease = Number(event.target.value);
+    saveAudioSettings();
+    updateAudioSettingsUI();
+    updateAudioParams();
+  });
+}
 
-  if (els.gateFloor) {
-    els.gateFloor.addEventListener('input', (event) => {
-      audioSettings.gateFloor = Number(event.target.value);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
+if (els.gateFloor) {
+  els.gateFloor.addEventListener('input', (event) => {
+    audioSettings.gateFloor = Number(event.target.value);
+    saveAudioSettings();
+    updateAudioSettingsUI();
+    updateAudioParams();
+  });
+}
 
 if (els.speakerBtn) {
   els.speakerBtn.addEventListener('click', () => {
@@ -2903,6 +3002,16 @@ function sendModeration(action) {
   socket.emit('moderation-action', { roomId: currentRoomId, action, targetId });
 }
 
+function requestRoomRefresh(mode) {
+  if (!socket || !currentRoomId) return;
+  try {
+    socket.emit('refresh-room', { roomId: currentRoomId, mode });
+    log(`Oda yenileme istendi: ${mode}`);
+  } catch (err) {
+    log(`Oda yenileme hatası (${mode}): ${err.message || err}`);
+  }
+}
+
 if (els.muteOtherBtn) {
   els.muteOtherBtn.addEventListener('click', () => sendModeration('mute'));
 }
@@ -2920,6 +3029,16 @@ if (els.slowModeBtn) {
     if (!socket || !currentRoomId || !els.slowModeSelect) return;
     const slowModeMs = Number(els.slowModeSelect.value);
     socket.emit('moderation-action', { roomId: currentRoomId, action: 'slowmode', slowModeMs });
+  });
+}
+if (els.softRefreshBtn) {
+  els.softRefreshBtn.addEventListener('click', () => {
+    requestRoomRefresh('soft');
+  });
+}
+if (els.hardRefreshBtn) {
+  els.hardRefreshBtn.addEventListener('click', () => {
+    requestRoomRefresh('hard');
   });
 }
 
