@@ -59,7 +59,7 @@
       <section id="roomView" class="view">
         <header class="header roomHeader">
           <div class="headerTitle">
-            <h1>Oda</h1>
+            <h1>EmreCord</h1>
             <p class="subtitle" data-i18n="subtitle">Sohbete hoş geldin</p>
           </div>
           <div class="statusBar">
@@ -193,6 +193,10 @@
                       </select>
                       <button id="slowModeBtn" class="btn">Uygula</button>
                     </div>
+                    <div class="row buttons">
+                      <button id="softRefreshBtn" class="btn">Bağlantıları Yenile</button>
+                      <button id="hardRefreshBtn" class="btn danger">Acil Reset (Bağlantıyı Sıfırla)</button>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -296,6 +300,14 @@
                     <option value="sfu">SFU (yakında)</option>
                   </select>
                 </div>
+                <div class="row">
+                  <label for="screenQuality" class="label">Ekran Paylaşım Kalitesi</label>
+                  <select id="screenQuality" class="input">
+                    <option value="low">Low (720p 15fps)</option>
+                    <option value="medium">Medium (720p 20fps)</option>
+                    <option value="high">High (900p 24fps)</option>
+                  </select>
+                </div>
                 <div class="row toggles">
                   <label class="switch">
                     <input id="listenOnlyToggle" type="checkbox" />
@@ -314,7 +326,7 @@
         </div>
       </div>
     </main>
-    <small id="version">Sürüm 1.5.1</small>
+    <small id="version">Sürüm 1.7.3</small>
     <div id="toastContainer" class="toastContainer"></div>
 
     <div id="micTestModal" class="modal hidden">
