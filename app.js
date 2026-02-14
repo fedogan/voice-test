@@ -191,6 +191,7 @@ let listenOnly = false;
 let isDeaf = false;
 let manualLeave = false;
 let pendingJoin = null;
+let roomJoinAcked = false;
 let currentNickname = null;
 let currentHostId = null;
 let screenStream = null;
@@ -308,14 +309,16 @@ const SPEAKING_THRESHOLD_DB = -45;
 const SPEAKING_HOLD_MS = 200;
 const SPEAKING_POLL_MS = 100;
 
-const peers = new Map(); // peerId -> { pc, audioEl, pendingCandidates: [] }
+const peers = new Map(); // peerId -> { pc, audioEl, pendingIce: [] }
 const participants = new Map(); // id -> nickname
 const participantViewEnabled = new Map(); // id -> viewEnabled
 const participantPresence = new Map(); // id -> { muted, speakerMuted, listenOnly, updatedAt }
 const PRESENCE_PREFIX = '__PRESENCE__';
 const speakerAnalysers = new Map(); // peerId -> { analyser, data, sourceNode, lastSpokeAt, speaking }
 const peerDisconnectTimers = new Map(); // peerId -> timeoutId
+const peerUiStates = new Map(); // peerId -> connecting | connected | recovering
 const PEER_DISCONNECT_GRACE_MS = 12000;
+const PEER_CONNECTING_TIMEOUT_MS = 10_000;
 const NEGOTIATION_DEBOUNCE_MS = 100;
 let speakerLoopRunning = false;
 let lastSpeakerCheck = 0;
@@ -379,6 +382,105 @@ function log(message) {
     els.log.textContent = logLines.join('\n');
     els.log.scrollTop = els.log.scrollHeight;
   }
+}
+
+function getPeerUiLabel(state) {
+  if (state === 'connected') return 'bağlı';
+  if (state === 'recovering') return 'yeniden bağlanıyor';
+  return 'bağlanıyor';
+}
+
+function setPeerUiState(peerId, nextState, reason = '') {
+  if (!peerId) return;
+  const prev = peerUiStates.get(peerId);
+  if (prev === nextState) return;
+  peerUiStates.set(peerId, nextState);
+  if (reason) {
+    log(`Peer durum: ${peerId} -> ${nextState} (${reason})`);
+  } else {
+    log(`Peer durum: ${peerId} -> ${nextState}`);
+  }
+  renderParticipants();
+  updatePeerConnectionStatusBanner();
+}
+
+function updatePeerConnectionStatusBanner() {
+  if (!roomJoinAcked || !currentRoomId) return;
+  const remoteIds = Array.from(participants.keys()).filter((id) => id !== localClientId);
+  if (remoteIds.length === 0) {
+    setStatus([`Odaya katıldın: ${currentRoomId}`, 'Peer beklenmiyor']);
+    return;
+  }
+  const connecting = remoteIds.filter((id) => (peerUiStates.get(id) || 'connecting') !== 'connected');
+  if (connecting.length === 0) {
+    setStatus([`Odaya katıldın: ${currentRoomId}`, `Tüm peer bağlantıları hazır (${remoteIds.length}/${remoteIds.length})`]);
+    return;
+  }
+  const preview = connecting.slice(0, 3).join(', ');
+  const suffix = connecting.length > 3 ? ', ...' : '';
+  setStatus([
+    `Odaya katıldın: ${currentRoomId}`,
+    `Peer bağlantısı bekleniyor: ${connecting.length}/${remoteIds.length}`,
+    `Bekleyen peer: ${preview}${suffix}`
+  ]);
+}
+
+function markRoomJoined({ roomId, participantCount = 0, source = 'users-in-room' } = {}) {
+  if (!roomId) return;
+  roomJoinAcked = true;
+  setStatus([`Odaya katıldın: ${roomId}`, `Katılımcı: ${participantCount}`]);
+  log(`Join ACK alındı (${source}): ${roomId}`);
+  updatePeerConnectionStatusBanner();
+}
+
+function isPeerConnected(pc) {
+  if (!pc) return false;
+  return pc.connectionState === 'connected'
+    || pc.iceConnectionState === 'connected'
+    || pc.iceConnectionState === 'completed';
+}
+
+function logPeerSummary(peerId, info, reason = 'state') {
+  const meta = info || peers.get(peerId);
+  if (!meta || !meta.pc) {
+    log(`[peer:${peerId}] ${reason} | peer-info-yok`);
+    return;
+  }
+  const { pc } = meta;
+  const pendingIceCount = Array.isArray(meta.pendingIce) ? meta.pendingIce.length : 0;
+  log(
+    `[peer:${peerId}] ${reason} | sig=${pc.signalingState} conn=${pc.connectionState} ice=${pc.iceConnectionState}`
+    + ` local=${Boolean(pc.localDescription)} remote=${Boolean(pc.remoteDescription)} pendingIce=${pendingIceCount}`
+  );
+}
+
+function clearPeerConnectingTimer(info) {
+  if (!info || !info.connectingTimeoutId) return;
+  clearTimeout(info.connectingTimeoutId);
+  info.connectingTimeoutId = null;
+}
+
+function recoverPeerConnection(peerId, reason = 'connecting-timeout') {
+  const info = peers.get(peerId);
+  if (!info) return;
+  if (isPeerConnected(info.pc)) return;
+  const nextRecoverCount = (info.recoverCount || 0) + 1;
+  log(`Peer recover tetiklendi (${reason}): ${peerId} (deneme ${nextRecoverCount})`);
+  setPeerUiState(peerId, 'recovering', reason);
+  cleanupPeer(peerId);
+  createPeerConnection(peerId, true, { forceRecreate: true, recoverCount: nextRecoverCount });
+}
+
+function startPeerConnectingTimer(peerId, info) {
+  if (!info) return;
+  clearPeerConnectingTimer(info);
+  info.connectingTimeoutId = setTimeout(() => {
+    const latest = peers.get(peerId);
+    if (!latest || latest !== info) return;
+    if (isPeerConnected(latest.pc)) return;
+    logPeerSummary(peerId, latest, 'connecting-timeout');
+    recoverPeerConnection(peerId, 'connecting-timeout');
+  }, PEER_CONNECTING_TIMEOUT_MS);
 }
 
 function getSelfPresence() {
@@ -1705,9 +1807,11 @@ function renderParticipants() {
     const li = document.createElement('li');
     const isSelf = id === localClientId;
     const indicators = getParticipantIndicators(id);
+    const peerState = isSelf ? '' : (peerUiStates.get(id) || (peers.has(id) ? 'connecting' : ''));
+    const peerSuffix = peerState ? ` [${getPeerUiLabel(peerState)}]` : '';
     const suffix = indicators ? ` ${indicators}` : '';
     const displayName = getDisplayNickname(nickname) || nickname;
-    li.textContent = isSelf ? `${displayName} (sen)${suffix}` : `${displayName}${suffix}`;
+    li.textContent = isSelf ? `${displayName} (sen)${suffix}` : `${displayName}${peerSuffix}${suffix}`;
     els.usersList.appendChild(li);
   });
 }
@@ -1863,7 +1967,8 @@ async function tryIceRestart(peerId, reason = 'ice-restart') {
   if (!info || !socket) return;
   if (!info.isNegotiationReady) return;
   const { pc } = info;
-  if (info.isMakingOffer || pc.signalingState !== 'stable') return;
+  if (info.isNegotiating || info.isMakingOffer || pc.signalingState !== 'stable') return;
+  info.isNegotiating = true;
   info.isMakingOffer = true;
   try {
     await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
@@ -1872,13 +1977,14 @@ async function tryIceRestart(peerId, reason = 'ice-restart') {
   } catch (err) {
     log(`ICE restart hatası ${peerId}: ${err.message || err}`);
   } finally {
+    info.isNegotiating = false;
     info.isMakingOffer = false;
   }
 }
 
-async function flushPendingCandidates(info, pc, peerId, reason) {
+async function flushPendingIceQueue(info, pc, peerId, reason) {
   if (!info || !pc) return;
-  const queue = Array.isArray(info.pendingCandidates) ? info.pendingCandidates : [];
+  const queue = Array.isArray(info.pendingIce) ? info.pendingIce : [];
   if (queue.length === 0) return;
   for (const candidate of queue) {
     try {
@@ -1887,7 +1993,8 @@ async function flushPendingCandidates(info, pc, peerId, reason) {
       log(`ICE ekleme hatası (${reason || 'pending'}): ${peerId} -> ${err.message || err}`);
     }
   }
-  info.pendingCandidates = [];
+  info.pendingIce = [];
+  logPeerSummary(peerId, info, 'pending-ice-flush');
 }
 
 function queueNegotiation(peerId, reason) {
@@ -2068,6 +2175,7 @@ function removeAudioElement(peerId) {
 function cleanupPeer(peerId) {
   const info = peers.get(peerId);
   if (!info) return;
+  clearPeerConnectingTimer(info);
   const disconnectTimer = peerDisconnectTimers.get(peerId);
   if (disconnectTimer) {
     clearTimeout(disconnectTimer);
@@ -2098,6 +2206,7 @@ function cleanupPeer(peerId) {
   removeAudioElement(peerId);
   cleanupSpeakingAnalyser(peerId);
   peers.delete(peerId);
+  peerUiStates.delete(peerId);
   iceLogCounts.delete(`in:${peerId}`);
   iceLogCounts.delete(`out:${peerId}`);
   if (activeScreenPeerId === peerId) {
@@ -2127,6 +2236,7 @@ function emitJoinCurrentRoom(reason) {
 
 function handleHardReconnect(roomId, reason) {
   if (!roomId || roomId !== currentRoomId) return;
+  roomJoinAcked = false;
   try {
     Array.from(peers.keys()).forEach(cleanupPeer);
   } catch (err) {
@@ -2304,7 +2414,11 @@ function ensureSocket() {
   socket.on('connect', () => {
     updateServerUrlDisplay();
     log(`Socket bağlandı: ${socket.id} (clientId: ${localClientId})`);
-    setStatus('Bağlandı.');
+    if (pendingJoin && pendingJoin.roomId) {
+      setStatus([`Sunucu bağlandı`, `Odaya katılım onayı bekleniyor: ${pendingJoin.roomId}`]);
+    } else {
+      setStatus('Bağlandı.');
+    }
     updateStatusBar();
     if (socket.io && socket.io.engine && !pingListenerAttached) {
       pingListenerAttached = true;
@@ -2320,6 +2434,7 @@ function ensureSocket() {
 
   socket.on('disconnect', () => {
     const wasInRoom = Boolean(currentRoomId);
+    roomJoinAcked = false;
     updateStatusBar();
     if (isScreenSharing) stopScreenShare('disconnect');
     cleanupAllPeers();
@@ -2364,6 +2479,40 @@ function ensureSocket() {
     renderRoomsList(rooms);
   });
 
+  socket.on('join-room-ack', ({ roomId, users, hostId } = {}) => {
+    if (!roomId) return;
+    currentRoomId = roomId;
+    localStorage.setItem(LAST_ROOM_KEY, roomId);
+    currentHostId = hostId || null;
+    manualLeave = false;
+    setUiState({ inRoom: true });
+    setView('room');
+    participants.clear();
+    participantViewEnabled.clear();
+    participants.set(localClientId, currentNickname || 'Ben');
+    participantViewEnabled.set(localClientId, true);
+    const peersInRoom = Array.isArray(users) ? users : [];
+    peersInRoom.forEach((user) => {
+      if (user && user.id) {
+        participants.set(user.id, user.nickname || user.id);
+        participantViewEnabled.set(user.id, user.viewEnabled !== false);
+      }
+    });
+    renderParticipants();
+    renderAudioControls();
+    updateModerationTargets();
+    updateModerationUI();
+    clearChat();
+    markRoomJoined({ roomId, participantCount: participants.size, source: 'join-room-ack' });
+    log(`Kullanıcı listesi alındı: ${peersInRoom.length}`);
+    peersInRoom.forEach((peer) => {
+      createPeerConnection(peer.id, true);
+    });
+    sendPresenceUpdate();
+    socket.emit('list-rooms');
+    startStatsLoop();
+  });
+
   socket.on('users-in-room', ({ roomId, users, hostId } = {}) => {
     if (!roomId) {
       setStatus('Oda ID gerekli.');
@@ -2391,8 +2540,7 @@ function ensureSocket() {
     updateModerationTargets();
     updateModerationUI();
     clearChat();
-    setStatus([`Odaya katılındı: ${currentRoomId}`, `Katılımcı: ${participants.size}`]);
-    log(`Odaya katılındı: ${currentRoomId}`);
+    markRoomJoined({ roomId: currentRoomId, participantCount: participants.size, source: 'users-in-room' });
     log(`Kullanıcı listesi alındı: ${peersInRoom.length}`);
 
     peersInRoom.forEach((peer) => {
@@ -2413,6 +2561,7 @@ function ensureSocket() {
     createPeerConnection(id, false);
     setStatus([`Yeni katılımcı: ${nickname || id}`, `Oda: ${currentRoomId || '-'}`]);
     log(`Yeni katılımcı: ${nickname || id}`);
+    updatePeerConnectionStatusBanner();
     showToast(`${nickname || id} odaya katıldı`, 'success');
     playUiBeep({ freq: 740, durationMs: 80 });
     // Adaptive quality is stats-driven; no immediate action needed here.
@@ -2429,6 +2578,7 @@ function ensureSocket() {
     updateModerationTargets();
     setStatus([`Kullanıcı ayrıldı: ${id}`, `Oda: ${currentRoomId || '-'}`]);
     log(`Kullanıcı ayrıldı: ${id}`);
+    updatePeerConnectionStatusBanner();
     showToast(`${id} odadan çıktı`, 'warn');
     playUiBeep({ freq: 440, durationMs: 90 });
     // Adaptive quality is stats-driven; no immediate action needed here.
@@ -2544,6 +2694,7 @@ function ensureSocket() {
     try {
       if (data.type === 'offer') {
         log(`Teklif alındı: ${from}`);
+        logPeerSummary(from, info, 'offer-recv');
         const offerCollision = info.isNegotiating || info.isMakingOffer || pc.signalingState !== 'stable';
         info.ignoreOffer = !info.isPolite && offerCollision;
         if (info.ignoreOffer) return;
@@ -2555,28 +2706,36 @@ function ensureSocket() {
           }
         }
         await pc.setRemoteDescription(data);
-        await flushPendingCandidates(info, pc, from, 'offer-sonrası');
+        await flushPendingIceQueue(info, pc, from, 'offer-sonrası');
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('signal', { to: from, data: pc.localDescription });
         info.isNegotiationReady = true;
+        logPeerSummary(from, info, 'answer-send');
         log(`Yanıt gönderildi: ${from}`);
       } else if (data.type === 'answer') {
         log(`Yanıt alındı: ${from}`);
         await pc.setRemoteDescription(data);
         info.isNegotiationReady = true;
-        await flushPendingCandidates(info, pc, from, 'answer-sonrası');
+        await flushPendingIceQueue(info, pc, from, 'answer-sonrası');
+        logPeerSummary(from, info, 'answer-recv');
       } else if (data.candidate) {
         const receivedCount = (iceLogCounts.get(`in:${from}`) || 0) + 1;
         iceLogCounts.set(`in:${from}`, receivedCount);
         if (receivedCount <= 1) log(`ICE candidate alındı: ${from}`);
         if (pc.remoteDescription) {
-          await pc.addIceCandidate(data);
+          try {
+            await pc.addIceCandidate(data);
+          } catch (err) {
+            log(`ICE add hatası: ${from} -> ${err.message || err}`);
+          }
         } else {
-          info.pendingCandidates.push(data);
+          info.pendingIce.push(data);
+          logPeerSummary(from, info, 'ice-queued');
         }
       }
     } catch (err) {
+      logPeerSummary(from, info, 'signal-error');
       setStatus([`WebRTC hatası: ${err.message || err}`, `Peer: ${from}`]);
     }
   });
@@ -2584,11 +2743,12 @@ function ensureSocket() {
   return socket;
 }
 
-function createPeerConnection(peerId, shouldCreateOffer) {
+function createPeerConnection(peerId, shouldCreateOffer, options = {}) {
+  const { forceRecreate = false, recoverCount = 0 } = options;
   if (peers.has(peerId)) {
     const existing = peers.get(peerId);
     const state = existing && existing.pc ? existing.pc.connectionState : 'closed';
-    if (state === 'connected' || state === 'connecting') {
+    if (!forceRecreate && (state === 'connected' || state === 'connecting')) {
       return existing;
     }
     log(`Aynı peer yeniden bağlandı, eski bağlantı force-close ediliyor: ${peerId}`);
@@ -2599,7 +2759,7 @@ function createPeerConnection(peerId, shouldCreateOffer) {
   const info = {
     pc,
     audioEl: createAudioElement(peerId),
-    pendingCandidates: [],
+    pendingIce: [],
     isNegotiating: false,
     isMakingOffer: false,
     isPolite: localClientId.localeCompare(peerId) > 0,
@@ -2608,6 +2768,8 @@ function createPeerConnection(peerId, shouldCreateOffer) {
     pendingNegotiationReason: '',
     negotiationDebounceTimer: null,
     negotiationToken: 0,
+    connectingTimeoutId: null,
+    recoverCount,
     isNegotiationReady: false,
     audioTransceiver: null,
     videoTransceiver: null
@@ -2623,6 +2785,7 @@ function createPeerConnection(peerId, shouldCreateOffer) {
     const sentCount = (iceLogCounts.get(`out:${peerId}`) || 0) + 1;
     iceLogCounts.set(`out:${peerId}`, sentCount);
     if (sentCount <= 1) log(`ICE candidate gönderildi: ${peerId}`);
+    logPeerSummary(peerId, info, 'ice-send');
   };
 
   pc.ontrack = (event) => {
@@ -2653,6 +2816,15 @@ function createPeerConnection(peerId, shouldCreateOffer) {
 
   pc.onconnectionstatechange = () => {
     log(`PC durumu ${peerId}: ${pc.connectionState}`);
+    logPeerSummary(peerId, info, 'connectionstatechange');
+    if (isPeerConnected(pc)) {
+      clearPeerConnectingTimer(info);
+      setPeerUiState(peerId, 'connected', 'connection-ready');
+      updatePeerConnectionStatusBanner();
+      return;
+    }
+    setPeerUiState(peerId, info.recoverCount > 0 ? 'recovering' : 'connecting', 'connection-waiting');
+    startPeerConnectingTimer(peerId, info);
     if (pc.connectionState === 'connected') {
       const disconnectTimer = peerDisconnectTimers.get(peerId);
       if (disconnectTimer) {
@@ -2676,6 +2848,7 @@ function createPeerConnection(peerId, shouldCreateOffer) {
       return;
     }
     if (pc.connectionState === 'failed') {
+      recoverPeerConnection(peerId, 'connection-failed');
       void tryIceRestart(peerId, 'connection-failed');
       return;
     }
@@ -2689,6 +2862,16 @@ function createPeerConnection(peerId, shouldCreateOffer) {
 
   pc.oniceconnectionstatechange = () => {
     log(`ICE durumu ${peerId}: ${pc.iceConnectionState}`);
+    logPeerSummary(peerId, info, 'iceconnectionstatechange');
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      clearPeerConnectingTimer(info);
+      setPeerUiState(peerId, 'connected', 'ice-ready');
+      updatePeerConnectionStatusBanner();
+      return;
+    }
+    if (pc.iceConnectionState === 'failed') {
+      recoverPeerConnection(peerId, 'ice-failed');
+    }
   };
 
   pc.onnegotiationneeded = () => {
@@ -2701,9 +2884,12 @@ function createPeerConnection(peerId, shouldCreateOffer) {
   };
 
   peers.set(peerId, info);
+  setPeerUiState(peerId, recoverCount > 0 ? 'recovering' : 'connecting', 'peer-created');
+  startPeerConnectingTimer(peerId, info);
   renderAudioControls();
   applyPeerMediaPolicy(peerId, { renegotiate: false });
   logPeerSenders(peerId, pc);
+  logPeerSummary(peerId, info, 'pc-created');
 
   if (shouldCreateOffer) {
     info.isNegotiationReady = true;
@@ -2728,6 +2914,7 @@ async function startJoinFlow(roomId) {
   if (!stream) return;
 
   currentRoomId = clean;
+  roomJoinAcked = false;
   manualLeave = false;
   pendingJoin = { roomId: clean, nickname: currentNickname, clientId: localClientId };
   setUiState({ inRoom: true });
@@ -2749,6 +2936,7 @@ async function startJoinFlow(roomId) {
 
 function leaveRoom() {
   manualLeave = true;
+  roomJoinAcked = false;
   pendingJoin = null;
   if (isScreenSharing) stopScreenShare('manual');
   cleanupAllPeers();
