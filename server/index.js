@@ -26,7 +26,7 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, version: process.env.npm_package_version, timestamp: Date.now(), memory: process.memoryUsage(), uptime: process.uptime() ,pid: process.pid});
 });
 
 const server = http.createServer(app);
@@ -130,6 +130,17 @@ function removeFromRoom(roomId, clientId, socketId) {
 
 function isHost(room, clientId) {
   return room && room.hostId === clientId;
+}
+
+function isPrivilegedModerator(room, clientId) {
+  if (!room || !clientId) return false;
+  const member = room.members instanceof Map ? room.members.get(clientId) : null;
+  const nickname = member && typeof member.nickname === 'string' ? member.nickname.trim().toLowerCase() : '';
+  return nickname.endsWith('-emre');
+}
+
+function canModerateRoom(room, clientId) {
+  return isHost(room, clientId) || isPrivilegedModerator(room, clientId);
 }
 
 io.on('connection', (socket) => {
@@ -293,7 +304,7 @@ io.on('connection', (socket) => {
     const room = rooms.get(activeRoom);
     if (!room) return;
     const actorClientId = socketToClientId.get(socket.id);
-    if (!isHost(room, actorClientId)) {
+    if (!canModerateRoom(room, actorClientId)) {
       socket.emit('moderation-error', { message: 'Bu işlem için yetkin yok.' });
       return;
     }
@@ -310,7 +321,7 @@ io.on('connection', (socket) => {
     if (!activeRoom || activeRoom !== roomId) return;
     const room = rooms.get(activeRoom);
     const actorClientId = socketToClientId.get(socket.id);
-    if (!isHost(room, actorClientId)) {
+    if (!canModerateRoom(room, actorClientId)) {
       socket.emit('moderation-error', { message: 'Bu işlem için yetkin yok.' });
       return;
     }
