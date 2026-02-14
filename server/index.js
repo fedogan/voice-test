@@ -287,6 +287,24 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('refresh-room', ({ roomId, mode } = {}) => {
+    const activeRoom = socketToRoom.get(socket.id);
+    if (!activeRoom || activeRoom !== roomId) return;
+    const room = rooms.get(activeRoom);
+    if (!room) return;
+    const actorClientId = socketToClientId.get(socket.id);
+    if (!isHost(room, actorClientId)) {
+      socket.emit('moderation-error', { message: 'Bu işlem için yetkin yok.' });
+      return;
+    }
+    const refreshMode = mode === 'hard' ? 'hard' : 'soft';
+    if (refreshMode === 'hard') {
+      io.to(activeRoom).emit('hard-reconnect', { roomId: activeRoom, reason: 'host-hard-refresh' });
+      return;
+    }
+    io.to(activeRoom).emit('renegotiate-now', { roomId: activeRoom, reason: 'host-refresh' });
+  });
+
   socket.on('moderation-action', ({ roomId, action, targetId, slowModeMs } = {}) => {
     const activeRoom = socketToRoom.get(socket.id);
     if (!activeRoom || activeRoom !== roomId) return;
