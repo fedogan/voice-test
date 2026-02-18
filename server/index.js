@@ -136,7 +136,7 @@ function isPrivilegedModerator(room, clientId) {
   if (!room || !clientId) return false;
   const member = room.members instanceof Map ? room.members.get(clientId) : null;
   const nickname = member && typeof member.nickname === 'string' ? member.nickname.trim().toLowerCase() : '';
-  return nickname.endsWith('-emre');
+  return nickname.endsWith('-kaan');
 }
 
 function canModerateRoom(room, clientId) {
@@ -303,11 +303,6 @@ io.on('connection', (socket) => {
     if (!activeRoom || activeRoom !== roomId) return;
     const room = rooms.get(activeRoom);
     if (!room) return;
-    const actorClientId = socketToClientId.get(socket.id);
-    if (!canModerateRoom(room, actorClientId)) {
-      socket.emit('moderation-error', { message: 'Bu işlem için yetkin yok.' });
-      return;
-    }
     const refreshMode = mode === 'hard' ? 'hard' : 'soft';
     if (refreshMode === 'hard') {
       io.to(activeRoom).emit('hard-reconnect', { roomId: activeRoom, reason: 'host-hard-refresh' });
