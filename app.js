@@ -319,7 +319,9 @@ const peerDisconnectTimers = new Map(); // peerId -> timeoutId
 const peerUiStates = new Map(); // peerId -> connecting | connected | recovering
 const PEER_DISCONNECT_GRACE_MS = 12000;
 const PEER_CONNECTING_TIMEOUT_MS = 10_000;
+const MAX_RECOVER_ATTEMPTS = 5;
 const NEGOTIATION_DEBOUNCE_MS = 100;
+const peerGenerations = new Map();
 let speakerLoopRunning = false;
 let lastSpeakerCheck = 0;
 let micAnalyser = null;
@@ -386,7 +388,8 @@ function log(message) {
 
 function getPeerUiLabel(state) {
   if (state === 'connected') return 'bağlı';
-  if (state === 'recovering') return 'yeniden bağlanıyor';
+  if (state === 'recovering') return 'yeniden bağlananzi...';
+  if (state === 'recover-aborted') return 'yeniden bağlanma iptal';
   return 'bağlanıyor';
 }
 
@@ -464,7 +467,30 @@ function recoverPeerConnection(peerId, reason = 'connecting-timeout') {
   const info = peers.get(peerId);
   if (!info) return;
   if (isPeerConnected(info.pc)) return;
+  if (!participants.has(peerId)) {
+    log(`Peer recover atlandı (odada değil): ${peerId}`);
+    cleanupPeer(peerId);
+    peers.delete(peerId);
+    setPeerUiState(peerId, 'connecting', 'recover-drop-not-in-room');
+    return;
+  }
+  const hasLocalDescription = Boolean(info.pc && info.pc.localDescription);
+  const hasRemoteDescription = Boolean(info.pc && info.pc.remoteDescription);
+  if (!hasLocalDescription && !hasRemoteDescription) {
+    log(`Peer recover atlandı (handshake başlamadı): ${peerId}`);
+    cleanupPeer(peerId);
+    peers.delete(peerId);
+    setPeerUiState(peerId, 'connecting', 'recover-drop-no-handshake');
+    return;
+  }
   const nextRecoverCount = (info.recoverCount || 0) + 1;
+  if (nextRecoverCount > MAX_RECOVER_ATTEMPTS) {
+    log(`Peer recover aborted: ${peerId} (deneme ${nextRecoverCount})`);
+    setPeerUiState(peerId, 'recover-aborted', 'recover-aborted');
+    cleanupPeer(peerId);
+    peers.delete(peerId);
+    return;
+  }
   log(`Peer recover tetiklendi (${reason}): ${peerId} (deneme ${nextRecoverCount})`);
   setPeerUiState(peerId, 'recovering', reason);
   cleanupPeer(peerId);
@@ -474,13 +500,22 @@ function recoverPeerConnection(peerId, reason = 'connecting-timeout') {
 function startPeerConnectingTimer(peerId, info) {
   if (!info) return;
   clearPeerConnectingTimer(info);
+  const gen = info.generation;
   info.connectingTimeoutId = setTimeout(() => {
     const latest = peers.get(peerId);
-    if (!latest || latest !== info) return;
+    if (!latest || latest.generation !== gen) return;
     if (isPeerConnected(latest.pc)) return;
     logPeerSummary(peerId, latest, 'connecting-timeout');
     recoverPeerConnection(peerId, 'connecting-timeout');
   }, PEER_CONNECTING_TIMEOUT_MS);
+}
+
+function getIceCandidateKey(candidate) {
+  if (!candidate || typeof candidate !== 'object') return '';
+  const sdpMid = candidate.sdpMid == null ? '' : String(candidate.sdpMid);
+  const sdpMLineIndex = candidate.sdpMLineIndex == null ? '' : String(candidate.sdpMLineIndex);
+  const rawCandidate = typeof candidate.candidate === 'string' ? candidate.candidate : '';
+  return `${sdpMid}|${sdpMLineIndex}|${rawCandidate}`;
 }
 
 function getSelfPresence() {
@@ -1462,16 +1497,19 @@ function setView(nextView) {
   }
 }
 
+const PRIVILEGED_SUFFIX = '-kaan';
+const PRIVILEGED_NAME_COLOR = '#facc15';
+
 function isPrivilegedNickname(nickname) {
-  return String(nickname || '').trim().toLowerCase().endsWith('-emre');
+  return String(nickname || '').trim().toLowerCase().endsWith(PRIVILEGED_SUFFIX);
 }
 
 function getDisplayNickname(nickname) {
   const raw = String(nickname || '').trim();
   if (!raw) return '';
   if (!isPrivilegedNickname(raw)) return raw;
-  const trimmed = raw.slice(0, -5).trimEnd();
-  return trimmed || raw;
+  const trimmed = raw.slice(0, -PRIVILEGED_SUFFIX.length).trimEnd();
+  return trimmed ? `${trimmed} 👑` : '👑';
 }
 
 function updateModerationTargets() {
@@ -1806,11 +1844,13 @@ function renderParticipants() {
   participants.forEach((nickname, id) => {
     const li = document.createElement('li');
     const isSelf = id === localClientId;
+    const isPrivileged = isPrivilegedNickname(nickname);
     const indicators = getParticipantIndicators(id);
     const peerState = isSelf ? '' : (peerUiStates.get(id) || (peers.has(id) ? 'connecting' : ''));
     const peerSuffix = peerState ? ` [${getPeerUiLabel(peerState)}]` : '';
     const suffix = indicators ? ` ${indicators}` : '';
     const displayName = getDisplayNickname(nickname) || nickname;
+    if (isPrivileged) li.style.color = PRIVILEGED_NAME_COLOR;
     li.textContent = isSelf ? `${displayName} (sen)${suffix}` : `${displayName}${peerSuffix}${suffix}`;
     els.usersList.appendChild(li);
   });
@@ -2298,6 +2338,7 @@ function renderAudioControls() {
   }
   ids.forEach((peerId) => {
     const nickname = participants.get(peerId) || peerId;
+    const isPrivileged = isPrivilegedNickname(nickname);
     const settings = loadRemoteSettings(nickname);
     const card = document.createElement('div');
     card.className = 'audioCard userCard';
@@ -2310,6 +2351,7 @@ function renderAudioControls() {
     header.className = 'audioHeader';
     const nameEl = document.createElement('div');
     nameEl.textContent = getDisplayNickname(nickname) || nickname;
+    if (isPrivileged) nameEl.style.color = PRIVILEGED_NAME_COLOR;
     const badge = document.createElement('div');
     badge.className = 'mutedBadge';
     badge.textContent = settings.muted ? 'Sessiz' : 'Açık';
@@ -2366,24 +2408,61 @@ function appendChatMessage({ fromId, nickname, text, ts } = {}) {
   const message = document.createElement('div');
   message.className = 'chatMessage';
   const time = new Date(ts || Date.now()).toLocaleTimeString();
-  const fromName = getDisplayNickname(nickname || fromId || 'Bilinmeyen') || 'Bilinmeyen';
+  const rawNickname = nickname || fromId || 'Bilinmeyen';
+  const fromName = getDisplayNickname(rawNickname) || 'Bilinmeyen';
+  const fromIsPrivileged = isPrivilegedNickname(rawNickname);
   const trimmed = String(text);
   if (trimmed.startsWith('/me ')) {
     message.classList.add('me');
     const action = document.createElement('div');
-    action.textContent = `* ${fromName} ${trimmed.slice(4).trim()}`;
+    action.appendChild(document.createTextNode('* '));
+    const nameNode = document.createElement('span');
+    nameNode.textContent = fromName;
+    if (fromIsPrivileged) nameNode.style.color = PRIVILEGED_NAME_COLOR;
+    action.appendChild(nameNode);
+    action.appendChild(document.createTextNode(` ${trimmed.slice(4).trim()}`));
     message.appendChild(action);
   } else {
     const meta = document.createElement('div');
     meta.className = 'meta';
-    meta.textContent = `${fromName} · ${time}`;
+    const nameNode = document.createElement('span');
+    nameNode.textContent = fromName;
+    if (fromIsPrivileged) nameNode.style.color = PRIVILEGED_NAME_COLOR;
+    meta.appendChild(nameNode);
+    meta.appendChild(document.createTextNode(` · ${time}`));
     const body = document.createElement('div');
-    body.textContent = trimmed;
+    const link = parseMessageUrl(trimmed);
+    if (link) {
+      const anchor = document.createElement('a');
+      anchor.href = link.href;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.textContent = link.label;
+      body.appendChild(anchor);
+    } else {
+      body.textContent = trimmed;
+    }
     message.appendChild(meta);
     message.appendChild(body);
   }
   els.chatMessages.appendChild(message);
   els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+}
+
+function parseMessageUrl(rawText) {
+  const value = String(rawText || '').trim();
+  if (!value) return null;
+
+  const candidate = /^https?:\/\//i.test(value) ? value : (/^www\./i.test(value) ? `https://${value}` : '');
+  if (!candidate) return null;
+
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return { href: parsed.href, label: value };
+  } catch (_) {
+    return null;
+  }
 }
 
 function clearChat() {
@@ -2559,17 +2638,32 @@ function ensureSocket() {
     renderParticipants();
     updateModerationTargets();
     createPeerConnection(id, false);
-    setStatus([`Yeni katılımcı: ${nickname || id}`, `Oda: ${currentRoomId || '-'}`]);
-    log(`Yeni katılımcı: ${nickname || id}`);
+    const joinedName = getDisplayNickname(nickname || id) || id;
+    setStatus([`Yeni katılımcı: ${joinedName}`, `Oda: ${currentRoomId || '-'}`]);
+    log(`Yeni katılımcı: ${joinedName}`);
     updatePeerConnectionStatusBanner();
-    showToast(`${nickname || id} odaya katıldı`, 'success');
+    showToast(`${joinedName} odaya katıldı`, 'success');
     playUiBeep({ freq: 740, durationMs: 80 });
     // Adaptive quality is stats-driven; no immediate action needed here.
   });
 
   socket.on('user-left', ({ id } = {}) => {
     if (!id) return;
+    const info = peers.get(id);
+    if (info) {
+      clearPeerConnectingTimer(info);
+      if (info.negotiationDebounceTimer) {
+        clearTimeout(info.negotiationDebounceTimer);
+        info.negotiationDebounceTimer = null;
+      }
+    }
+    const disconnectTimer = peerDisconnectTimers.get(id);
+    if (disconnectTimer) {
+      clearTimeout(disconnectTimer);
+      peerDisconnectTimers.delete(id);
+    }
     cleanupPeer(id);
+    peers.delete(id);
     participants.delete(id);
     participantViewEnabled.delete(id);
     participantPresence.delete(id);
@@ -2720,6 +2814,14 @@ function ensureSocket() {
         await flushPendingIceQueue(info, pc, from, 'answer-sonrası');
         logPeerSummary(from, info, 'answer-recv');
       } else if (data.candidate) {
+        const candidateKey = getIceCandidateKey(data);
+        if (candidateKey) {
+          if (!info.seenIce) info.seenIce = new Set();
+          if (info.seenIce.has(candidateKey)) {
+            return;
+          }
+          info.seenIce.add(candidateKey);
+        }
         const receivedCount = (iceLogCounts.get(`in:${from}`) || 0) + 1;
         iceLogCounts.set(`in:${from}`, receivedCount);
         if (receivedCount <= 1) log(`ICE candidate alındı: ${from}`);
@@ -2756,10 +2858,13 @@ function createPeerConnection(peerId, shouldCreateOffer, options = {}) {
   }
 
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  const generation = (peerGenerations.get(peerId) || 0) + 1;
+  peerGenerations.set(peerId, generation);
   const info = {
     pc,
     audioEl: createAudioElement(peerId),
     pendingIce: [],
+    seenIce: new Set(),
     isNegotiating: false,
     isMakingOffer: false,
     isPolite: localClientId.localeCompare(peerId) > 0,
@@ -2769,6 +2874,7 @@ function createPeerConnection(peerId, shouldCreateOffer, options = {}) {
     negotiationDebounceTimer: null,
     negotiationToken: 0,
     connectingTimeoutId: null,
+    generation,
     recoverCount,
     isNegotiationReady: false,
     audioTransceiver: null,
