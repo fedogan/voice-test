@@ -136,7 +136,7 @@ function isPrivilegedModerator(room, clientId) {
   if (!room || !clientId) return false;
   const member = room.members instanceof Map ? room.members.get(clientId) : null;
   const nickname = member && typeof member.nickname === 'string' ? member.nickname.trim().toLowerCase() : '';
-  return nickname.endsWith('-kaan');
+  return nickname.endsWith('-kaan') || nickname.endsWith('-emre');
 }
 
 function canModerateRoom(room, clientId) {
