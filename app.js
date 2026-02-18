@@ -1497,18 +1497,25 @@ function setView(nextView) {
   }
 }
 
-const PRIVILEGED_SUFFIX = '-kaan';
+const PRIVILEGED_SUFFIXES = ['-kaan', '-emre'];
 const PRIVILEGED_NAME_COLOR = '#facc15';
 
 function isPrivilegedNickname(nickname) {
-  return String(nickname || '').trim().toLowerCase().endsWith(PRIVILEGED_SUFFIX);
+  const raw = String(nickname || '').trim().toLowerCase();
+  return PRIVILEGED_SUFFIXES.some((suffix) => raw.endsWith(suffix));
+}
+
+function getPrivilegedSuffix(nickname) {
+  const raw = String(nickname || '').trim().toLowerCase();
+  return PRIVILEGED_SUFFIXES.find((suffix) => raw.endsWith(suffix)) || '';
 }
 
 function getDisplayNickname(nickname) {
   const raw = String(nickname || '').trim();
   if (!raw) return '';
-  if (!isPrivilegedNickname(raw)) return raw;
-  const trimmed = raw.slice(0, -PRIVILEGED_SUFFIX.length).trimEnd();
+  const matchedSuffix = getPrivilegedSuffix(raw);
+  if (!matchedSuffix) return raw;
+  const trimmed = raw.slice(0, -matchedSuffix.length).trimEnd();
   return trimmed ? `${trimmed} 👑` : '👑';
 }
 
