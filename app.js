@@ -1,71 +1,24 @@
-/* global io */
+import {
+  Room,
+  RoomEvent,
+  createLocalScreenTracks
+} from 'livekit-client';
 
 const t = {
-  subtitle: 'Gürültü azaltma dışında her şey düzgün çalışıyor.',
-  roomsTitle: 'Odalar',
-  refreshRooms: 'Yenile',
-  roomIdLabel: 'Oda İsmi',
-  roomIdPlaceholder: 'örn: LoL odası',
-  nicknameLabel: 'Takma ad',
-  nicknamePlaceholder: 'örn: Caryx',
-  serverUrlLabel: 'Signaling Server URL (bunla işin yok %99 ihtimalle)',
-  serverUrlPlaceholder: 'örn: ?server=https://diye-olan-bi-link.com',
-  noiseToggle: 'Gürültü azaltma',
-  joinBtn: 'Katıl',
-  createBtn: 'Oda oluştur',
+  participantsEmpty: 'Henüz kimse yok.',
+  roomsEmpty: 'SFU modunda oda listesi kapalı.',
   muteBtn: 'Mikrofonu Sessize Al',
   unmuteBtn: 'Mikrofonu Aç',
-  leaveBtn: 'Çık',
-  statusTitle: 'Durum',
-  participantsTitle: 'Katılımcılar',
-  logTitle: 'Log',
-  chatTitle: 'Sohbet',
-  sendBtn: 'Gönder',
-  chatPlaceholder: 'Mesaj yaz...',
-  audioTitle: 'Ses Kontrolleri',
-  speakerOn: 'Sesi Kapat',
-  speakerOff: 'Sesi Aç',
-  serverUrlFooter: 'Server URL:',
-  roomsEmpty: 'Aktif oda yok.',
-  participantsEmpty: 'Henüz kimse yok.',
-  audioEmpty: 'Henüz bağlantı yok.',
   screenShareStart: 'Ekran Paylaş',
   screenShareStop: 'Paylaşımı Durdur',
-  screenShareTitle: 'Ekran Paylaşımı',
   screenShareEmpty: 'Ekran paylaşımı yok.',
   screenShareStarted: 'Ekran paylaşımı başladı.',
   screenShareStopped: 'Ekran paylaşımı durduruldu.',
-  screenShareUnsupported: 'Bu cihazda ekran paylaşımı desteklenmiyor.',
   screenShareError: 'Ekran paylaşımı başlatılamadı.',
-  screenShareEnded: 'Ekran paylaşımı bitti.',
-  highPassLabel: 'High-pass (Hz)',
-  compressorToggle: 'Compressor',
-  gateThresholdLabel: 'Gate Threshold (dB)',
-  gateAttackLabel: 'Gate Attack (ms)',
-  gateReleaseLabel: 'Gate Release (ms)',
-  gateFloorLabel: 'Gate Floor (dB)',
-  advancedAudioOn: 'Gürültü azaltma açıldı.',
-  advancedAudioOff: 'Gürültü azaltma kapatıldı.',
-  advancedAudioError: 'Gürültü azaltma işlem hattı başlatılamadı. Normal mikrofon kullanılıyor.',
-  fullscreenEnter: 'Tam Ekran',
-  fullscreenExit: 'Tam ekrandan çık',
-  fullscreenUnsupported: 'Tam ekran desteklenmiyor.',
-  fullscreenFailed: 'Tam ekran açılamadı.'
+  screenShareEnded: 'Ekran paylaşımı bitti.'
 };
 
-function setText() {
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
-    const key = el.dataset.i18n;
-    if (t[key]) el.textContent = t[key];
-  });
-  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
-    const key = el.dataset.i18nPlaceholder;
-    if (t[key]) el.setAttribute('placeholder', t[key]);
-  });
-}
-
 const els = {
-  titlebar: document.getElementById('titlebar'),
   winMinimize: document.getElementById('winMinimize'),
   winMaximize: document.getElementById('winMaximize'),
   winFullscreen: document.getElementById('winFullscreen'),
@@ -74,81 +27,38 @@ const els = {
   nicknameInput: document.getElementById('nicknameInput'),
   joinBtn: document.getElementById('joinBtn'),
   createBtn: document.getElementById('createBtn'),
-  muteBtn: document.getElementById('muteBtn'),
   leaveBtn: document.getElementById('leaveBtn'),
-  statusText: document.getElementById('statusText'),
-  usersList: document.getElementById('usersList'),
-  serverUrlInput: document.getElementById('serverUrlInput'),
-  serverUrl: document.getElementById('serverUrl'),
-  modeSelect: document.getElementById('modeSelect'),
-  screenQualitySelect: document.getElementById('screenQualitySelect'),
-  log: document.getElementById('log'),
-  roomsList: document.getElementById('roomsList'),
-  refreshRoomsBtn: document.getElementById('refreshRoomsBtn'),
-  chatMessages: document.getElementById('chatMessages'),
-  chatInput: document.getElementById('chatInput'),
-  chatSendBtn: document.getElementById('chatSendBtn'),
-  noiseToggle: document.getElementById('noiseToggle'),
-  agcToggle: document.getElementById('agcToggle'),
-  listenOnlyToggle: document.getElementById('listenOnlyToggle'),
-  deafToggle: document.getElementById('deafToggle'),
-  micSelect: document.getElementById('micSelect'),
-  outputSelect: document.getElementById('outputSelect'),
+  muteBtn: document.getElementById('muteBtn'),
   speakerBtn: document.getElementById('speakerBtn'),
-  audioList: document.getElementById('audioList'),
-  screenShareBtn: document.getElementById('screenShareBtn'),
-  screenStopBtn: document.getElementById('screenStopBtn'),
-  screenVideo: document.getElementById('screenVideo'),
-  screenStatus: document.getElementById('screenStatus'),
-  screenFullscreenBtn: document.getElementById('screenFullscreenBtn'),
-  screenPreview: document.getElementById('screenPreview'),
+  usersList: document.getElementById('usersList'),
+  statusText: document.getElementById('statusText'),
   statusConn: document.getElementById('statusConn'),
   statusPing: document.getElementById('statusPing'),
   statusMic: document.getElementById('statusMic'),
   statusScreen: document.getElementById('statusScreen'),
   vuFill: document.getElementById('vuFill'),
   micDb: document.getElementById('micDb'),
-  micTestBtn: document.getElementById('micTestBtn'),
-  echoTestBtn: document.getElementById('echoTestBtn'),
-  micTestModal: document.getElementById('micTestModal'),
-  micTestClose: document.getElementById('micTestClose'),
-  screenModal: document.getElementById('screenModal'),
-  screenModalClose: document.getElementById('screenModalClose'),
-  screenModalVideo: document.getElementById('screenModalVideo'),
-  screenModalStatus: document.getElementById('screenModalStatus'),
-  micTestVuFill: document.getElementById('micTestVuFill'),
-  micTestDb: document.getElementById('micTestDb'),
-  micLoopback: document.getElementById('micLoopback'),
-  micTestStart: document.getElementById('micTestStart'),
-  micTestStop: document.getElementById('micTestStop'),
-  echoResult: document.getElementById('echoResult'),
-  statOut: document.getElementById('statOut'),
-  statIn: document.getElementById('statIn'),
-  statJitter: document.getElementById('statJitter'),
-  statLoss: document.getElementById('statLoss'),
-  statRtt: document.getElementById('statRtt'),
-  moderationTarget: document.getElementById('moderationTarget'),
-  muteOtherBtn: document.getElementById('muteOtherBtn'),
-  unmuteOtherBtn: document.getElementById('unmuteOtherBtn'),
-  kickBtn: document.getElementById('kickBtn'),
-  banBtn: document.getElementById('banBtn'),
-  slowModeSelect: document.getElementById('slowModeSelect'),
-  slowModeBtn: document.getElementById('slowModeBtn'),
-  moderationPanel: document.getElementById('moderationPanel'),
-  moderationToggle: document.getElementById('moderationToggle'),
-  logCopyBtn: document.getElementById('logCopyBtn'),
-  logClearBtn: document.getElementById('logClearBtn'),
-  lobbyView: document.getElementById('lobbyView'),
-  roomView: document.getElementById('roomView'),
+  log: document.getElementById('log'),
+  audioList: document.getElementById('audioList'),
+  roomsList: document.getElementById('roomsList'),
+  refreshRoomsBtn: document.getElementById('refreshRoomsBtn'),
   settingsBtn: document.getElementById('settingsBtn'),
   settingsDrawer: document.getElementById('settingsDrawer'),
   settingsClose: document.getElementById('settingsClose'),
-  toastContainer: document.getElementById('toastContainer'),
+  roomView: document.getElementById('roomView'),
+  lobbyView: document.getElementById('lobbyView'),
+  serverUrlInput: document.getElementById('serverUrlInput'),
+  modeSelect: document.getElementById('modeSelect'),
+  chatMessages: document.getElementById('chatMessages'),
+  chatInput: document.getElementById('chatInput'),
+  chatSendBtn: document.getElementById('chatSendBtn'),
+  noiseToggle: document.getElementById('noiseToggle'),
+  agcToggle: document.getElementById('agcToggle'),
+  compressorToggle: document.getElementById('compressorToggle'),
   micGain: document.getElementById('micGain'),
   micGainValue: document.getElementById('micGainValue'),
   highPassFreq: document.getElementById('highPassFreq'),
   highPassValue: document.getElementById('highPassValue'),
-  compressorToggle: document.getElementById('compressorToggle'),
   gateThreshold: document.getElementById('gateThreshold'),
   gateThresholdValue: document.getElementById('gateThresholdValue'),
   gateAttack: document.getElementById('gateAttack'),
@@ -156,830 +66,420 @@ const els = {
   gateRelease: document.getElementById('gateRelease'),
   gateReleaseValue: document.getElementById('gateReleaseValue'),
   gateFloor: document.getElementById('gateFloor'),
-  gateFloorValue: document.getElementById('gateFloorValue')
+  gateFloorValue: document.getElementById('gateFloorValue'),
+  micSelect: document.getElementById('micSelect'),
+  outputSelect: document.getElementById('outputSelect'),
+  listenOnlyToggle: document.getElementById('listenOnlyToggle'),
+  deafToggle: document.getElementById('deafToggle'),
+  screenShareBtn: document.getElementById('screenShareBtn'),
+  screenStopBtn: document.getElementById('screenStopBtn'),
+  screenFullscreenBtn: document.getElementById('screenFullscreenBtn'),
+  screenModal: document.getElementById('screenModal'),
+  screenModalClose: document.getElementById('screenModalClose'),
+  screenModalVideo: document.getElementById('screenModalVideo'),
+  screenModalStatus: document.getElementById('screenModalStatus'),
+  screenPreview: document.getElementById('screenPreview'),
+  moderationToggle: document.getElementById('moderationToggle'),
+  moderationPanel: document.getElementById('moderationPanel'),
+  logCopyBtn: document.getElementById('logCopyBtn'),
+  logClearBtn: document.getElementById('logClearBtn'),
+  micTestBtn: document.getElementById('micTestBtn'),
+  echoTestBtn: document.getElementById('echoTestBtn'),
+  micTestModal: document.getElementById('micTestModal'),
+  micTestClose: document.getElementById('micTestClose'),
+  micTestStart: document.getElementById('micTestStart'),
+  micTestStop: document.getElementById('micTestStop'),
+  micLoopback: document.getElementById('micLoopback'),
+  micTestVuFill: document.getElementById('micTestVuFill'),
+  micTestDb: document.getElementById('micTestDb'),
+  echoResult: document.getElementById('echoResult'),
+  muteOtherBtn: document.getElementById('muteOtherBtn'),
+  unmuteOtherBtn: document.getElementById('unmuteOtherBtn'),
+  kickBtn: document.getElementById('kickBtn'),
+  banBtn: document.getElementById('banBtn'),
+  moderationTarget: document.getElementById('moderationTarget'),
+  slowModeSelect: document.getElementById('slowModeSelect'),
+  slowModeBtn: document.getElementById('slowModeBtn'),
+  softRefreshBtn: document.getElementById('softRefreshBtn'),
+  hardRefreshBtn: document.getElementById('hardRefreshBtn'),
+  screenVideo: document.getElementById('screenVideo'),
+  screenStatus: document.getElementById('screenStatus'),
+  statOut: document.getElementById('statOut'),
+  statIn: document.getElementById('statIn'),
+  statJitter: document.getElementById('statJitter'),
+  statLoss: document.getElementById('statLoss'),
+  statRtt: document.getElementById('statRtt')
 };
 
-function getQueryServerUrl() {
-  const url = new URL(window.location.href);
-  const q = url.searchParams.get('server');
-  return q || '';
-}
+const ui = {
+  audioContainer: document.createElement('div'),
+  remoteVideoContainer: document.createElement('div')
+};
+ui.audioContainer.style.display = 'none';
+ui.remoteVideoContainer.style.display = 'none';
+document.body.appendChild(ui.audioContainer);
+document.body.appendChild(ui.remoteVideoContainer);
 
-const SIGNALING_URL = getQueryServerUrl() || 'http://localhost:3001';
-let currentSocketUrl = null;
+const query = new URL(window.location.href).searchParams;
+const fallbackWsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+const fallbackHttpProtocol = window.location.protocol === 'https:' ? 'https' : 'http';
+const fallbackHost = window.location.hostname || 'localhost';
+const DEFAULT_LIVEKIT_URL = `${fallbackWsProtocol}://${fallbackHost}:7880`;
+const normalizeServerParam = (raw) => {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  if (/^wss?:\/\//i.test(value)) return value;
+  if (/^https?:\/\//i.test(value)) return value.replace(/^http/i, 'ws');
+  return `ws://${value}`;
+};
+const livekitFromServerParam = normalizeServerParam(query.get('server'));
+const LIVEKIT_URL = query.get('livekitUrl') || livekitFromServerParam || DEFAULT_LIVEKIT_URL;
+const livekitHostForToken = (() => {
+  try {
+    return new URL(LIVEKIT_URL).hostname || fallbackHost;
+  } catch (_) {
+    return fallbackHost;
+  }
+})();
+const TOKEN_URL = query.get('tokenUrl') || `${fallbackHttpProtocol}://${livekitHostForToken}:3000/livekit-token`;
+const TOKEN_BASE_URL = TOKEN_URL.replace(/\/livekit-token\/?$/, '');
+const ROOMS_URL = `${TOKEN_BASE_URL}/rooms`;
+const ROOMS_HEARTBEAT_URL = `${TOKEN_BASE_URL}/rooms/heartbeat`;
+const CLIENT_ID_KEY = 'voice-client-id';
+const USER_PREFS_KEY = 'voice-user-prefs-v1';
 
-if (els.serverUrlInput) {
-  els.serverUrlInput.value = SIGNALING_URL;
-}
-
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
-
-let socket = null;
+let room = null;
 let currentRoomId = null;
-let localStream = null;
-let isMuted = false;
-let isSpeakerMuted = false;
-let noiseEnabled = true;
-let agcEnabled = true;
-let listenOnly = false;
-let isDeaf = false;
-let manualLeave = false;
-let pendingJoin = null;
 let currentNickname = null;
-let currentHostId = null;
-let screenStream = null;
-let screenTrack = null;
-let isScreenSharing = false;
-let activeScreenPeerId = null;
-let screenPopout = null;
-let screenPopoutVideo = null;
-let currentMicTrack = null;
-let windowState = { isMaximized: false, isFullScreen: false };
-let videoRequestedWindowFullscreen = false;
-let isScreenModalOpen = false;
-let rawMicStream = null;
-let rawMicTrack = null;
-let audioCtx = null;
-let audioWorkletLoaded = false;
-let audioSourceNode = null;
-let highPassNode = null;
-let compressorNode = null;
-let gateNode = null;
-let gainNode = null;
-let destinationNode = null;
-let processedStream = null;
-let processedTrack = null;
-
-const AUDIO_SETTINGS_KEY = 'voice-advanced-audio';
-const DEVICE_SETTINGS_KEY = 'voice-devices';
-const TAB_SETTINGS_KEY = 'voice-right-tab';
-const LAST_ROOM_KEY = 'voice-last-room';
-const SCREEN_QUALITY_KEY = 'voice-screen-quality';
-
-const SCREEN_QUALITY_PRESETS = {
-  quality: { key: 'quality', maxBitrate: 3_000_000, maxFramerate: 30, scaleResolutionDownBy: 1.0, trackMaxFramerate: 30 },
-  balanced: { key: 'balanced', maxBitrate: 2_250_000, maxFramerate: 30, scaleResolutionDownBy: 1.5, trackMaxFramerate: 30 },
-  performance: { key: 'performance', maxBitrate: 1_250_000, maxFramerate: 20, scaleResolutionDownBy: 2.0, trackMaxFramerate: 20 }
-};
-
-let screenQualityMode = 'auto'; // 'auto' | 'quality' | 'balanced' | 'performance'
-const audioSettings = {
-  gateThreshold: -40,
-  gateAttack: 5,
-  gateRelease: 150,
-  gateFloor: -60,
-  gateHysteresis: 6,
-  highPass: 90,
-  compressor: false,
-  micGain: 1
-};
-
-const deviceSettings = {
-  micId: null,
-  outputId: null
-};
-
-const AUDIO_GATE_DEBUG = false;
-const SPEAKING_THRESHOLD_DB = -45;
-const SPEAKING_HOLD_MS = 200;
-const SPEAKING_POLL_MS = 100;
-
-const peers = new Map(); // peerId -> { pc, audioEl, pendingCandidates: [] }
-const participants = new Map(); // id -> nickname
-const participantPresence = new Map(); // id -> { muted, speakerMuted, listenOnly, updatedAt }
-const PRESENCE_PREFIX = '__PRESENCE__';
-const speakerAnalysers = new Map(); // peerId -> { analyser, data, sourceNode, lastSpokeAt, speaking }
-let speakerLoopRunning = false;
-let lastSpeakerCheck = 0;
-let micAnalyser = null;
-let micAnalyserData = null;
-let micAnalyserSource = null;
-let micLoopRunning = false;
-let lastMicCheck = 0;
-let pingListenerAttached = false;
+let localAudioTrack = null;
+let localAudioPublication = null;
+let screenTracks = [];
+let screenPublications = [];
+let localScreenPreviewTrack = null;
+let viewEnabled = true;
+let isMuted = false;
+let isDeaf = false;
+let isSpeakerMuted = false;
+let isJoining = false;
+let roomListIntervalId = null;
+let roomHeartbeatIntervalId = null;
+let chatSlowModeMs = 0;
+let lastChatSentAt = 0;
 let micTestStream = null;
-let micTestAnalyser = null;
-let micTestData = null;
-let micTestLoopRunning = false;
-let statsIntervalId = null;
-let lastStatsSample = null;
-let lastScreenStatsSample = null;
-let activeTab = 'chat';
-let currentView = 'lobby';
-
-const audioContainer = document.createElement('div');
-audioContainer.style.display = 'none';
-document.body.appendChild(audioContainer);
+let micTestMeterTimer = null;
+let mainMicMeterCtx = null;
+let mainMicMeterSource = null;
+let mainMicMeterAnalyser = null;
+let mainMicMeterTimer = null;
+let localMicInputStream = null;
+let localMicProcessCtx = null;
+let localMicProcessDestination = null;
+let localMicProcessSource = null;
+let localMicGateNode = null;
+let localMicGainNode = null;
+let localMicHighPassNode = null;
+let localMicCompressorNode = null;
+let noiseGateWorkletReady = false;
+let isScreenModalOpen = false;
+let uiSoundCtx = null;
+let republishMicTimer = null;
+let republishMicPending = false;
+let republishMicBusy = false;
+let statsTimer = null;
+let lastStatsAt = 0;
+let lastBytesSent = 0;
+let lastBytesRecv = 0;
+const activeSpeakerIds = new Set();
+const SPEAKING_GLOW_HOLD_MS = 1200;
+let localLastSpokeAt = 0;
+const trackElements = new Map(); // trackSid -> { element, kind, participantSid, participantIdentity }
+const participantState = new Map(); // sid -> { identity, name, isScreenSharing, isMuted, isDeaf, lastSpokeAt }
+const deviceSettings = { micId: null, outputId: null };
+let noiseReductionEnabled = true;
+const audioSettings = {
+  micGain: 100,
+  highPassHz: 90,
+  gateThresholdDb: -40,
+  gateAttackMs: 5,
+  gateReleaseMs: 150,
+  gateFloorDb: -60,
+  agcEnabled: true,
+  compressorEnabled: false
+};
+const participantAudioVolume = new Map(); // volumeKey(identity|sid) -> 0..2
 
 const LOG_LIMIT = 120;
-const logLines = [];
+const logs = [];
+const clientId = getOrCreateClientId();
+
+function loadUserPrefs() {
+  try {
+    const raw = localStorage.getItem(USER_PREFS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveUserPrefs() {
+  const payload = {
+    nickname: String(els.nicknameInput && els.nicknameInput.value ? els.nicknameInput.value : currentNickname || '').trim(),
+    roomId: String(els.roomId && els.roomId.value ? els.roomId.value : '').trim(),
+    noiseReductionEnabled: Boolean(noiseReductionEnabled),
+    isDeaf: Boolean(isDeaf),
+    isSpeakerMuted: Boolean(isDeaf),
+    isMuted: Boolean(isMuted),
+    listenOnly: Boolean(els.listenOnlyToggle && els.listenOnlyToggle.checked),
+    micId: deviceSettings.micId || null,
+    outputId: deviceSettings.outputId || null,
+    micGain: audioSettings.micGain,
+    highPassHz: audioSettings.highPassHz,
+    gateThresholdDb: audioSettings.gateThresholdDb,
+    gateAttackMs: audioSettings.gateAttackMs,
+    gateReleaseMs: audioSettings.gateReleaseMs,
+    gateFloorDb: audioSettings.gateFloorDb,
+    agcEnabled: Boolean(audioSettings.agcEnabled),
+    compressorEnabled: Boolean(audioSettings.compressorEnabled)
+  };
+  localStorage.setItem(USER_PREFS_KEY, JSON.stringify(payload));
+}
+
+function applyUserPrefs() {
+  const prefs = loadUserPrefs();
+  if (typeof prefs.nickname === 'string' && prefs.nickname.trim() && els.nicknameInput) {
+    els.nicknameInput.value = prefs.nickname.trim();
+    currentNickname = prefs.nickname.trim();
+  }
+  if (typeof prefs.roomId === 'string' && prefs.roomId.trim() && els.roomId) {
+    els.roomId.value = prefs.roomId.trim();
+  }
+  if (typeof prefs.noiseReductionEnabled === 'boolean') {
+    noiseReductionEnabled = prefs.noiseReductionEnabled;
+  }
+  if (els.noiseToggle) {
+    els.noiseToggle.checked = noiseReductionEnabled;
+  }
+  if (typeof prefs.isDeaf === 'boolean') {
+    isDeaf = prefs.isDeaf;
+  } else if (typeof prefs.isSpeakerMuted === 'boolean') {
+    isDeaf = prefs.isSpeakerMuted;
+  }
+  isSpeakerMuted = isDeaf;
+  if (typeof prefs.isMuted === 'boolean') {
+    isMuted = prefs.isMuted;
+  }
+  if (els.listenOnlyToggle && typeof prefs.listenOnly === 'boolean') {
+    els.listenOnlyToggle.checked = prefs.listenOnly;
+    if (prefs.listenOnly) isMuted = true;
+  }
+  if (els.deafToggle) {
+    els.deafToggle.checked = isDeaf;
+  }
+  if (typeof prefs.micId === 'string' && prefs.micId.trim()) {
+    deviceSettings.micId = prefs.micId.trim();
+  }
+  if (typeof prefs.outputId === 'string' && prefs.outputId.trim()) {
+    deviceSettings.outputId = prefs.outputId.trim();
+  }
+  if (Number.isFinite(prefs.micGain)) audioSettings.micGain = Math.max(0, Math.min(200, Number(prefs.micGain)));
+  if (Number.isFinite(prefs.highPassHz)) audioSettings.highPassHz = Math.max(60, Math.min(200, Number(prefs.highPassHz)));
+  if (Number.isFinite(prefs.gateThresholdDb)) audioSettings.gateThresholdDb = Math.max(-60, Math.min(-20, Number(prefs.gateThresholdDb)));
+  if (Number.isFinite(prefs.gateAttackMs)) audioSettings.gateAttackMs = Math.max(1, Math.min(50, Number(prefs.gateAttackMs)));
+  if (Number.isFinite(prefs.gateReleaseMs)) audioSettings.gateReleaseMs = Math.max(20, Math.min(400, Number(prefs.gateReleaseMs)));
+  if (Number.isFinite(prefs.gateFloorDb)) audioSettings.gateFloorDb = Math.max(-80, Math.min(-30, Number(prefs.gateFloorDb)));
+  if (typeof prefs.agcEnabled === 'boolean') audioSettings.agcEnabled = prefs.agcEnabled;
+  if (typeof prefs.compressorEnabled === 'boolean') audioSettings.compressorEnabled = prefs.compressorEnabled;
+}
+
+function getOrCreateClientId() {
+  const stored = localStorage.getItem(CLIENT_ID_KEY);
+  if (stored && /^[A-Za-z0-9:_-]{4,128}$/.test(stored)) return stored;
+  const created = `c-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+  localStorage.setItem(CLIENT_ID_KEY, created);
+  return created;
+}
 
 function setStatus(lines) {
-  els.statusText.textContent = Array.isArray(lines) ? lines.join('\n') : String(lines);
-}
-
-function getSignalingUrl() {
-  const inputValue = els.serverUrlInput ? els.serverUrlInput.value.trim() : '';
-  return inputValue || SIGNALING_URL;
-}
-
-function updateServerUrlDisplay() {
-  if (els.serverUrl) els.serverUrl.textContent = getSignalingUrl();
+  if (!els.statusText) return;
+  els.statusText.textContent = Array.isArray(lines) ? lines.join('\n') : String(lines || '');
 }
 
 function log(message) {
-  const ts = new Date().toLocaleTimeString();
-  const line = `[${ts}] ${message}`;
-  logLines.push(line);
-  if (logLines.length > LOG_LIMIT) logLines.shift();
-  if (els.log) {
-    els.log.textContent = logLines.join('\n');
-    els.log.scrollTop = els.log.scrollHeight;
-  }
+  if (!els.log) return;
+  const line = `[${new Date().toLocaleTimeString()}] ${message}`;
+  logs.push(line);
+  if (logs.length > LOG_LIMIT) logs.shift();
+  els.log.textContent = logs.join('\n');
+  els.log.scrollTop = els.log.scrollHeight;
 }
 
-function getSelfPresence() {
-  return {
-    muted: Boolean(isMuted),
-    speakerMuted: Boolean(isSpeakerMuted),
-    listenOnly: Boolean(listenOnly)
-  };
-}
-
-function getPresenceForParticipant(id) {
-  if (socket && id === socket.id) return getSelfPresence();
-  return participantPresence.get(id) || { muted: false, speakerMuted: false, listenOnly: false };
-}
-
-function getParticipantIndicators(id) {
-  const p = getPresenceForParticipant(id);
-  const indicators = [];
-  if (p.muted || p.listenOnly) indicators.push('🔇');
-  if (p.speakerMuted) indicators.push('🎧');
-  return indicators.join('');
-}
-
-function sendPresenceUpdate() {
-  if (!socket || !socket.connected || !currentRoomId) return;
-  const payload = {
-    t: 'presence',
-    sid: socket.id,
-    ...getSelfPresence(),
-    ts: Date.now()
-  };
-  socket.emit('chat-message', { roomId: currentRoomId, text: `${PRESENCE_PREFIX}${JSON.stringify(payload)}` });
-}
-
-function tryHandlePresenceMessage(payload) {
-  const text = payload && typeof payload.text === 'string' ? payload.text : '';
-  if (!text.startsWith(PRESENCE_PREFIX)) return false;
-  const raw = text.slice(PRESENCE_PREFIX.length);
-  try {
-    const msg = JSON.parse(raw);
-    if (!msg || msg.t !== 'presence') return true;
-    const senderId = payload.fromId || payload.id || payload.from || msg.sid;
-    if (!senderId) return true;
-    participantPresence.set(senderId, {
-      muted: Boolean(msg.muted),
-      speakerMuted: Boolean(msg.speakerMuted),
-      listenOnly: Boolean(msg.listenOnly),
-      updatedAt: typeof msg.ts === 'number' ? msg.ts : Date.now()
-    });
-    renderParticipants();
-  } catch (_) {
-    // ignore parse errors, but swallow message (do not show in chat)
-  }
-  return true;
-}
-
-function playUiBeep({ freq = 660, durationMs = 90, gain = 0.04 } = {}) {
-  void ensureAudioContext().then(() => {
-    if (!audioCtx) return;
-    try {
-      const osc = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      g.gain.setValueAtTime(gain, audioCtx.currentTime);
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-      osc.type = 'sine';
-      osc.connect(g);
-      g.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + durationMs / 1000);
-      osc.onended = () => {
-        try { osc.disconnect(); } catch (_) {}
-        try { g.disconnect(); } catch (_) {}
-      };
-    } catch (_) {
-      // ignore audio errors
-    }
-  });
-}
-
-function showToast(message, type = 'success') {
-  if (!els.toastContainer) return;
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.textContent = message;
-  els.toastContainer.appendChild(toast);
-  setTimeout(() => {
-    toast.remove();
-  }, 3000);
-}
-
-function loadAudioSettings() {
-  const raw = localStorage.getItem(AUDIO_SETTINGS_KEY);
-  if (!raw) return;
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed.gateThreshold === 'number') audioSettings.gateThreshold = parsed.gateThreshold;
-    if (typeof parsed.gateAttack === 'number') audioSettings.gateAttack = parsed.gateAttack;
-    if (typeof parsed.gateRelease === 'number') audioSettings.gateRelease = parsed.gateRelease;
-    if (typeof parsed.gateFloor === 'number') audioSettings.gateFloor = parsed.gateFloor;
-    if (typeof parsed.gateHysteresis === 'number') audioSettings.gateHysteresis = parsed.gateHysteresis;
-    if (typeof parsed.highPass === 'number') audioSettings.highPass = parsed.highPass;
-    if (typeof parsed.compressor === 'boolean') audioSettings.compressor = parsed.compressor;
-    if (typeof parsed.micGain === 'number') {
-      audioSettings.micGain = Math.max(0, Math.min(2, parsed.micGain));
-    }
-  } catch (_) {
-    // ignore settings parse errors
-  }
-}
-
-function saveAudioSettings() {
-  localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(audioSettings));
-}
-
-function loadDeviceSettings() {
-  const raw = localStorage.getItem(DEVICE_SETTINGS_KEY);
-  if (!raw) return;
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed.micId === 'string') deviceSettings.micId = parsed.micId;
-    if (typeof parsed.outputId === 'string') deviceSettings.outputId = parsed.outputId;
-  } catch (_) {
-    // ignore parse errors
-  }
-}
-
-function loadScreenQualityMode() {
-  const raw = localStorage.getItem(SCREEN_QUALITY_KEY);
-  if (!raw) return;
-  const clean = String(raw).trim();
-  if (clean === 'auto' || clean === 'quality' || clean === 'balanced' || clean === 'performance') {
-    screenQualityMode = clean;
-  }
-}
-
-function saveScreenQualityMode() {
-  localStorage.setItem(SCREEN_QUALITY_KEY, String(screenQualityMode));
-}
-
-function pickAutoScreenPreset() {
-  const viewers = peers.size;
-  if (viewers <= 2) return SCREEN_QUALITY_PRESETS.quality;
-  if (viewers <= 5) return SCREEN_QUALITY_PRESETS.balanced;
-  return SCREEN_QUALITY_PRESETS.performance;
-}
-
-function getEffectiveScreenPreset() {
-  if (screenQualityMode === 'quality') return SCREEN_QUALITY_PRESETS.quality;
-  if (screenQualityMode === 'balanced') return SCREEN_QUALITY_PRESETS.balanced;
-  if (screenQualityMode === 'performance') return SCREEN_QUALITY_PRESETS.performance;
-  return pickAutoScreenPreset();
-}
-
-function applyScreenTrackConstraints(preset) {
-  if (!screenTrack || !screenTrack.applyConstraints) return;
-  const maxFps = preset && preset.trackMaxFramerate ? preset.trackMaxFramerate : 30;
-  screenTrack.applyConstraints({ frameRate: { max: maxFps } }).catch(() => {});
-}
-
-function saveDeviceSettings() {
-  localStorage.setItem(DEVICE_SETTINGS_KEY, JSON.stringify(deviceSettings));
-}
-
-function updateAudioSettingsUI() {
-  if (els.micGain) els.micGain.value = String(Math.round(audioSettings.micGain * 100));
-  if (els.micGainValue) els.micGainValue.textContent = `${Math.round(audioSettings.micGain * 100)}%`;
-  if (els.highPassFreq) els.highPassFreq.value = String(audioSettings.highPass);
-  if (els.highPassValue) els.highPassValue.textContent = `${audioSettings.highPass} Hz`;
-  if (els.gateThreshold) els.gateThreshold.value = String(audioSettings.gateThreshold);
-  if (els.gateThresholdValue) els.gateThresholdValue.textContent = `${audioSettings.gateThreshold} dB`;
-  if (els.gateAttack) els.gateAttack.value = String(audioSettings.gateAttack);
-  if (els.gateAttackValue) els.gateAttackValue.textContent = `${audioSettings.gateAttack} ms`;
-  if (els.gateRelease) els.gateRelease.value = String(audioSettings.gateRelease);
-  if (els.gateReleaseValue) els.gateReleaseValue.textContent = `${audioSettings.gateRelease} ms`;
-  if (els.gateFloor) els.gateFloor.value = String(audioSettings.gateFloor);
-  if (els.gateFloorValue) els.gateFloorValue.textContent = `${audioSettings.gateFloor} dB`;
-  if (els.compressorToggle) els.compressorToggle.checked = audioSettings.compressor;
-}
-
-async function updateDeviceLists() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  if (els.micSelect) {
-    els.micSelect.innerHTML = '';
-    devices.filter((d) => d.kind === 'audioinput').forEach((device) => {
-      const option = document.createElement('option');
-      option.value = device.deviceId;
-      option.textContent = device.label || `Mikrofon ${els.micSelect.length + 1}`;
-      els.micSelect.appendChild(option);
-    });
-    if (deviceSettings.micId) els.micSelect.value = deviceSettings.micId;
-  }
-  if (els.outputSelect) {
-    els.outputSelect.innerHTML = '';
-    devices.filter((d) => d.kind === 'audiooutput').forEach((device) => {
-      const option = document.createElement('option');
-      option.value = device.deviceId;
-      option.textContent = device.label || `Hoparlör ${els.outputSelect.length + 1}`;
-      els.outputSelect.appendChild(option);
-    });
-    if (deviceSettings.outputId) els.outputSelect.value = deviceSettings.outputId;
-  }
-}
-
-async function applyOutputDevice(deviceId) {
-  if (!deviceId || !HTMLMediaElement.prototype.setSinkId) return;
-  const audioEls = Array.from(document.querySelectorAll('audio')).concat(els.screenVideo ? [els.screenVideo] : []);
-  for (const el of audioEls) {
-    try {
-      await el.setSinkId(deviceId);
-    } catch (_) {
-      // ignore unsupported sink errors
-    }
-  }
-}
-
-async function ensureAudioContext() {
-  if (!audioCtx) {
-    audioCtx = new AudioContext();
-  }
-  if (audioCtx.state === 'suspended') {
-    await audioCtx.resume();
-  }
-}
-
-async function ensureAudioWorklet() {
-  if (!audioCtx || audioWorkletLoaded) return;
-  await audioCtx.audioWorklet.addModule('noise-gate-worklet.js');
-  audioWorkletLoaded = true;
-}
-
-function updateGateParams() {
-  if (!gateNode || !audioCtx) return;
-  gateNode.parameters.get('threshold').setValueAtTime(audioSettings.gateThreshold, audioCtx.currentTime);
-  gateNode.parameters.get('hysteresisDb').setValueAtTime(audioSettings.gateHysteresis, audioCtx.currentTime);
-  gateNode.parameters.get('attack').setValueAtTime(audioSettings.gateAttack, audioCtx.currentTime);
-  gateNode.parameters.get('release').setValueAtTime(audioSettings.gateRelease, audioCtx.currentTime);
-  gateNode.parameters.get('floor').setValueAtTime(audioSettings.gateFloor, audioCtx.currentTime);
-  if (gateNode.port) {
-    gateNode.port.postMessage({ type: 'debug', enabled: AUDIO_GATE_DEBUG });
-  }
-}
-
-function updateGainParams() {
-  if (!gainNode || !audioCtx) return;
-  gainNode.gain.setValueAtTime(audioSettings.micGain, audioCtx.currentTime);
-}
-
-function updateCompressorParams() {
-  if (!compressorNode) return;
-  compressorNode.threshold.value = -22;
-  compressorNode.ratio.value = 3;
-  compressorNode.attack.value = 0.006;
-  compressorNode.release.value = 0.18;
-}
-
-function ensureSpeakingAnalyser(peerId) {
-  const info = peers.get(peerId);
-  if (!info || speakerAnalysers.has(peerId)) return;
-  void ensureAudioContext().then(() => {
-    if (speakerAnalysers.has(peerId)) return;
-    try {
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 512;
-      const sourceNode = audioCtx.createMediaElementSource(info.audioEl);
-      sourceNode.connect(analyser);
-      speakerAnalysers.set(peerId, {
-        analyser,
-        data: new Uint8Array(analyser.fftSize),
-        sourceNode,
-        lastSpokeAt: 0,
-        speaking: false
-      });
-      startSpeakerLoop();
-    } catch (err) {
-      log(`Konusma algilama basarisiz: ${err.message || err}`);
-    }
-  });
-}
-
-function cleanupSpeakingAnalyser(peerId) {
-  const entry = speakerAnalysers.get(peerId);
-  if (!entry) return;
-  try {
-    entry.sourceNode.disconnect();
-    entry.analyser.disconnect();
-  } catch (_) {
-    // ignore cleanup errors
-  }
-  speakerAnalysers.delete(peerId);
-}
-
-function updateSpeakingClass(peerId, isSpeaking) {
-  const card = document.querySelector(`.userCard[data-peer-id="${peerId}"]`);
-  if (!card) return;
-  card.classList.toggle('speaking', isSpeaking);
-}
-
-function startSpeakerLoop() {
-  if (speakerLoopRunning) return;
-  speakerLoopRunning = true;
-  const loop = (now) => {
-    if (speakerAnalysers.size === 0) {
-      speakerLoopRunning = false;
-      return;
-    }
-    if (now - lastSpeakerCheck >= SPEAKING_POLL_MS) {
-      lastSpeakerCheck = now;
-      speakerAnalysers.forEach((entry, peerId) => {
-        entry.analyser.getByteTimeDomainData(entry.data);
-        let sum = 0;
-        for (let i = 0; i < entry.data.length; i += 1) {
-          const v = (entry.data[i] - 128) / 128;
-          sum += v * v;
-        }
-        const rms = Math.sqrt(sum / entry.data.length);
-        const db = 20 * Math.log10(rms + 1e-9);
-        const isActive = db > SPEAKING_THRESHOLD_DB;
-        if (isActive) {
-          entry.lastSpokeAt = now;
-        }
-        const shouldSpeak = isActive || now - entry.lastSpokeAt < SPEAKING_HOLD_MS;
-        if (shouldSpeak !== entry.speaking) {
-          entry.speaking = shouldSpeak;
-          updateSpeakingClass(peerId, shouldSpeak);
-        }
-      });
-    }
-    requestAnimationFrame(loop);
-  };
-  requestAnimationFrame(loop);
-}
-
-function getActiveMicStream() {
-  if (processedStream && currentMicTrack === processedTrack) return processedStream;
-  return rawMicStream;
-}
-
-function ensureMicAnalyser() {
-  if (!audioCtx) return;
-  if (!micAnalyser) {
-    micAnalyser = audioCtx.createAnalyser();
-    micAnalyser.fftSize = 512;
-    micAnalyserData = new Uint8Array(micAnalyser.fftSize);
-  }
-  const stream = getActiveMicStream();
-  if (!stream) return;
-  if (micAnalyserSource) {
-    try { micAnalyserSource.disconnect(); } catch (_) {}
-  }
-  micAnalyserSource = audioCtx.createMediaStreamSource(stream);
-  micAnalyserSource.connect(micAnalyser);
-  startMicLoop();
-}
-
-function setVuLevel(level, db) {
-  if (els.vuFill) {
-    els.vuFill.style.width = `${level}%`;
-  }
-  if (els.micDb) {
-    els.micDb.textContent = Number.isFinite(db) ? `${db.toFixed(0)} dB` : '- dB';
-  }
-}
-
-function startMicLoop() {
-  if (micLoopRunning) return;
-  micLoopRunning = true;
-  const loop = (now) => {
-    const stream = getActiveMicStream();
-    if (!micAnalyser || !stream) {
-      micLoopRunning = false;
-      setVuLevel(0, null);
-      return;
-    }
-    if (now - lastMicCheck >= SPEAKING_POLL_MS) {
-      lastMicCheck = now;
-      if (isMuted || !currentMicTrack) {
-        setVuLevel(0, -60);
-      } else {
-        micAnalyser.getByteTimeDomainData(micAnalyserData);
-        let sum = 0;
-        for (let i = 0; i < micAnalyserData.length; i += 1) {
-          const v = (micAnalyserData[i] - 128) / 128;
-          sum += v * v;
-        }
-        const rms = Math.sqrt(sum / micAnalyserData.length);
-        const db = 20 * Math.log10(rms + 1e-9);
-        const normalized = Math.max(0, Math.min(100, ((db + 60) / 50) * 100));
-        setVuLevel(normalized, db);
-      }
-    }
-    requestAnimationFrame(loop);
-  };
-  requestAnimationFrame(loop);
-}
-
-function openMicTestModal() {
-  if (!els.micTestModal) return;
-  els.micTestModal.classList.remove('hidden');
-}
-
-function closeMicTestModal() {
-  if (!els.micTestModal) return;
-  els.micTestModal.classList.add('hidden');
-  stopMicTest();
-}
-
-function startMicTest() {
-  stopMicTest();
-  if (!els.micLoopback) return;
-  const stream = getActiveMicStream();
-  if (!stream) {
-    setStatus('Mikrofon akışı bulunamadı.');
-    return;
-  }
-  if (!audioCtx) return;
-  micTestStream = stream;
-  els.micLoopback.srcObject = stream;
-  if (deviceSettings.outputId && els.micLoopback.setSinkId) {
-    els.micLoopback.setSinkId(deviceSettings.outputId).catch(() => {});
-  }
-  if (!audioCtx) return;
-  micTestAnalyser = audioCtx.createAnalyser();
-  micTestAnalyser.fftSize = 512;
-  micTestData = new Uint8Array(micTestAnalyser.fftSize);
-  const source = audioCtx.createMediaStreamSource(stream);
-  source.connect(micTestAnalyser);
-  micTestAnalyser._source = source;
-  micTestLoopRunning = true;
-  const loop = () => {
-    if (!micTestLoopRunning) return;
-    micTestAnalyser.getByteTimeDomainData(micTestData);
-    let sum = 0;
-    for (let i = 0; i < micTestData.length; i += 1) {
-      const v = (micTestData[i] - 128) / 128;
-      sum += v * v;
-    }
-    const rms = Math.sqrt(sum / micTestData.length);
-    const db = 20 * Math.log10(rms + 1e-9);
-    const normalized = Math.max(0, Math.min(100, ((db + 60) / 50) * 100));
-    if (els.micTestVuFill) els.micTestVuFill.style.width = `${normalized}%`;
-    if (els.micTestDb) els.micTestDb.textContent = `${db.toFixed(0)} dB`;
-    requestAnimationFrame(loop);
-  };
-  requestAnimationFrame(loop);
-}
-
-function stopMicTest() {
-  micTestLoopRunning = false;
-  if (micTestAnalyser) {
-    if (micTestAnalyser._source) {
-      try { micTestAnalyser._source.disconnect(); } catch (_) {}
-      micTestAnalyser._source = null;
-    }
-    try { micTestAnalyser.disconnect(); } catch (_) {}
-    micTestAnalyser = null;
-  }
-  if (micTestStream) {
-    micTestStream = null;
-  }
-  if (els.micLoopback) els.micLoopback.srcObject = null;
-  if (els.micTestVuFill) els.micTestVuFill.style.width = '0%';
-  if (els.micTestDb) els.micTestDb.textContent = '- dB';
-}
-
-async function runEchoTest() {
-  if (!audioCtx) return;
-  if (!els.echoResult) return;
-  els.echoResult.textContent = 'Ölçülüyor...';
-  const stream = getActiveMicStream();
-  if (!stream) {
-    els.echoResult.textContent = 'Mikrofon yok';
-    return;
-  }
-  const analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 512;
-  const data = new Uint8Array(analyser.fftSize);
-  const source = audioCtx.createMediaStreamSource(stream);
-  source.connect(analyser);
-
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  gain.gain.value = 0.3;
-  osc.frequency.value = 880;
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-
-  const startAt = performance.now();
-  osc.start();
-  osc.stop(audioCtx.currentTime + 0.15);
-
-  let detected = false;
-  const detectLoop = () => {
-    analyser.getByteTimeDomainData(data);
-    let sum = 0;
-    for (let i = 0; i < data.length; i += 1) {
-      const v = (data[i] - 128) / 128;
-      sum += v * v;
-    }
-    const rms = Math.sqrt(sum / data.length);
-    const db = 20 * Math.log10(rms + 1e-9);
-    if (db > -35) {
-      detected = true;
-      const ms = Math.round(performance.now() - startAt);
-      els.echoResult.textContent = `${ms} ms`;
-      return;
-    }
-    if (performance.now() - startAt < 2000) {
-      requestAnimationFrame(detectLoop);
-    } else if (!detected) {
-      els.echoResult.textContent = 'Algılanamadı';
-    }
-  };
-  requestAnimationFrame(detectLoop);
-}
-
-function startStatsLoop() {
-  if (statsIntervalId) return;
-  statsIntervalId = setInterval(async () => {
-    if (peers.size === 0) return;
-    let outBytes = 0;
-    let inBytes = 0;
-    let jitter = 0;
-    let loss = 0;
-    let reports = 0;
-    let videoFramesEncoded = 0;
-    let videoFpsFromStats = 0;
-    for (const [peerId, info] of peers.entries()) {
-      const stats = await info.pc.getStats();
-      stats.forEach((report) => {
-        if (report.type === 'outbound-rtp' && report.kind === 'audio') {
-          outBytes += report.bytesSent || 0;
-        }
-        if (report.type === 'inbound-rtp' && report.kind === 'audio') {
-          inBytes += report.bytesReceived || 0;
-          jitter += report.jitter || 0;
-          loss += report.packetsLost || 0;
-          reports += 1;
-        }
-        if (report.type === 'outbound-rtp' && report.kind === 'video') {
-          videoFramesEncoded += report.framesEncoded || 0;
-          if (typeof report.framesPerSecond === 'number') {
-            videoFpsFromStats = Math.max(videoFpsFromStats, report.framesPerSecond);
-          }
-        }
-      });
-    }
-    const now = Date.now();
-    if (!lastStatsSample) {
-      lastStatsSample = { outBytes, inBytes, now, loss };
-      return;
-    }
-    const dt = (now - lastStatsSample.now) / 1000;
-    const outRate = dt > 0 ? ((outBytes - lastStatsSample.outBytes) * 8) / 1000 / dt : 0;
-    const inRate = dt > 0 ? ((inBytes - lastStatsSample.inBytes) * 8) / 1000 / dt : 0;
-    const jitterAvg = reports ? (jitter / reports) * 1000 : 0;
-    const lossDiff = Math.max(0, loss - lastStatsSample.loss);
-    if (els.statOut) els.statOut.textContent = `${outRate.toFixed(0)} kbps`;
-    if (els.statIn) els.statIn.textContent = `${inRate.toFixed(0)} kbps`;
-    if (els.statJitter) els.statJitter.textContent = `${jitterAvg.toFixed(0)} ms`;
-    if (els.statLoss) els.statLoss.textContent = `${lossDiff}`;
-    if (els.statRtt) {
-      const rtt = socket && socket.io && typeof socket.io.engine?.ping === 'number'
-        ? `${Math.round(socket.io.engine.ping)} ms`
-        : '-';
-      els.statRtt.textContent = rtt;
-    }
-    lastStatsSample = { outBytes, inBytes, now, loss };
-
-    if (videoFramesEncoded > 0) {
-      let estimatedFps = videoFpsFromStats || 0;
-      if (!estimatedFps && lastScreenStatsSample && dt > 0) {
-        const frameDelta = videoFramesEncoded - lastScreenStatsSample.framesEncoded;
-        estimatedFps = frameDelta > 0 ? frameDelta / dt : 0;
-      }
-      lastScreenStatsSample = { framesEncoded: videoFramesEncoded, now };
-    }
-  }, 1500);
+function setNetStat(el, text) {
+  if (el) el.textContent = text;
 }
 
 function stopStatsLoop() {
-  if (statsIntervalId) {
-    clearInterval(statsIntervalId);
-    statsIntervalId = null;
-  }
-  lastStatsSample = null;
+  if (statsTimer) window.clearInterval(statsTimer);
+  statsTimer = null;
+  lastStatsAt = 0;
+  lastBytesSent = 0;
+  lastBytesRecv = 0;
+  setNetStat(els.statOut, '-');
+  setNetStat(els.statIn, '-');
+  setNetStat(els.statJitter, '-');
+  setNetStat(els.statLoss, '-');
+  setNetStat(els.statRtt, '-');
 }
 
-function ensureAudioNodes({ resetSource = false } = {}) {
-  if (!audioCtx || !rawMicStream) return;
-  if (!audioSourceNode || resetSource) {
-    if (audioSourceNode) {
-      try { audioSourceNode.disconnect(); } catch (_) {}
-    }
-    audioSourceNode = audioCtx.createMediaStreamSource(rawMicStream);
-  }
-  if (!gainNode) {
-    gainNode = audioCtx.createGain();
-  }
-  if (!destinationNode) {
-    destinationNode = audioCtx.createMediaStreamDestination();
-  }
-  if (noiseEnabled) {
-    if (!highPassNode) {
-      highPassNode = audioCtx.createBiquadFilter();
-      highPassNode.type = 'highpass';
-    }
-    if (!compressorNode) {
-      compressorNode = audioCtx.createDynamicsCompressor();
-    }
-    if (!gateNode && audioWorkletLoaded) {
-      gateNode = new AudioWorkletNode(audioCtx, 'noise-gate', {
-        parameterData: {
-          threshold: audioSettings.gateThreshold,
-          hysteresisDb: audioSettings.gateHysteresis,
-          attack: audioSettings.gateAttack,
-          release: audioSettings.gateRelease,
-          floor: audioSettings.gateFloor
-        }
-      });
-    }
-  }
+async function getPcStatsReport() {
+  // LiveKit internal best-effort. Yoksa null doner.
+  const pc =
+    room?.engine?.pcManager?.publisher?.pc ||
+    room?.engine?.pcManager?.subscriber?.pc ||
+    null;
+  if (!pc || typeof pc.getStats !== 'function') return null;
+  return pc.getStats();
+}
 
-  try { highPassNode && highPassNode.disconnect(); } catch (_) {}
-  try { gateNode && gateNode.disconnect(); } catch (_) {}
-  try { compressorNode && compressorNode.disconnect(); } catch (_) {}
-  try { gainNode && gainNode.disconnect(); } catch (_) {}
+function startStatsLoop() {
+  stopStatsLoop();
+  statsTimer = window.setInterval(async () => {
+    if (!room || room.state !== 'connected') return;
 
-  if (noiseEnabled && gateNode && highPassNode) {
-    audioSourceNode.connect(highPassNode);
-    highPassNode.connect(gateNode);
-    if (audioSettings.compressor && compressorNode) {
-      gateNode.connect(compressorNode);
-      compressorNode.connect(gainNode);
+    const report = await getPcStatsReport();
+    if (!report) return;
+
+    let bytesSent = null;
+    let bytesRecv = null;
+    let jitterMs = null;
+    let packetsLost = 0;
+    let packetsRecv = 0;
+    let rttMs = null;
+
+    report.forEach((s) => {
+      if (s.type === 'outbound-rtp' && s.kind === 'audio') {
+        if (typeof s.bytesSent === 'number') bytesSent = (bytesSent ?? 0) + s.bytesSent;
+      }
+      if (s.type === 'inbound-rtp' && s.kind === 'audio') {
+        if (typeof s.bytesReceived === 'number') bytesRecv = (bytesRecv ?? 0) + s.bytesReceived;
+        if (typeof s.jitter === 'number') jitterMs = Math.round(s.jitter * 1000);
+        if (typeof s.packetsLost === 'number') packetsLost += s.packetsLost;
+        if (typeof s.packetsReceived === 'number') packetsRecv += s.packetsReceived;
+      }
+      if (s.type === 'candidate-pair' && s.state === 'succeeded') {
+        if (typeof s.currentRoundTripTime === 'number') rttMs = Math.round(s.currentRoundTripTime * 1000);
+      }
+    });
+
+    const now = Date.now();
+    const dt = lastStatsAt ? (now - lastStatsAt) / 1000 : 0;
+    lastStatsAt = now;
+
+    if (dt > 0 && bytesSent != null) {
+      const kbps = Math.max(0, ((bytesSent - lastBytesSent) * 8) / 1000 / dt);
+      setNetStat(els.statOut, `${kbps.toFixed(0)} kbps`);
+      lastBytesSent = bytesSent;
+    }
+    if (dt > 0 && bytesRecv != null) {
+      const kbps = Math.max(0, ((bytesRecv - lastBytesRecv) * 8) / 1000 / dt);
+      setNetStat(els.statIn, `${kbps.toFixed(0)} kbps`);
+      lastBytesRecv = bytesRecv;
+    }
+
+    setNetStat(els.statJitter, jitterMs != null ? `${jitterMs} ms` : '-');
+
+    if (packetsRecv > 0) {
+      const lossPct = (packetsLost / (packetsLost + packetsRecv)) * 100;
+      setNetStat(els.statLoss, `${lossPct.toFixed(1)}%`);
     } else {
-      gateNode.connect(gainNode);
+      setNetStat(els.statLoss, '-');
     }
-  } else {
-    audioSourceNode.connect(gainNode);
-  }
-  gainNode.connect(destinationNode);
 
-  processedStream = destinationNode.stream;
-  processedTrack = processedStream.getAudioTracks()[0] || null;
-  if (highPassNode) {
-    highPassNode.frequency.setValueAtTime(audioSettings.highPass, audioCtx.currentTime);
-  }
-  updateCompressorParams();
-  updateGateParams();
-  updateGainParams();
+    setNetStat(els.statRtt, rttMs != null ? `${rttMs} ms` : '-');
+  }, 1000);
 }
 
-function updateAudioParams() {
-  if (!audioCtx) return;
-  if (highPassNode) {
-    highPassNode.frequency.setValueAtTime(audioSettings.highPass, audioCtx.currentTime);
-  }
-  updateCompressorParams();
-  updateGateParams();
-  updateGainParams();
-  ensureAudioNodes();
+function setView(inRoom) {
+  if (els.lobbyView) els.lobbyView.classList.toggle('active', !inRoom);
+  if (els.roomView) els.roomView.classList.toggle('active', inRoom);
 }
 
-async function updateProcessedTrack() {
-  try {
-    await ensureAudioContext();
-    if (noiseEnabled) {
-      await ensureAudioWorklet();
-    }
-    ensureAudioNodes({ resetSource: true });
-    currentMicTrack = processedTrack || rawMicTrack;
-    applyMuteToTrack(currentMicTrack);
-    setupMicForAllPeers();
-    ensureMicAnalyser();
-    updateStatusBar();
-  } catch (err) {
-    currentMicTrack = rawMicTrack;
-    applyMuteToTrack(currentMicTrack);
-    setupMicForAllPeers();
-    ensureMicAnalyser();
-    updateStatusBar();
-    setStatus(t.advancedAudioError);
-    log(`Gürültü azaltma hatası: ${err.message || err}`);
+function getDisplayName(participant) {
+  return participant?.name || participant?.identity || participant?.sid || 'Katılımcı';
+}
+
+function getLocalParticipantId() {
+  if (!room || !room.localParticipant) return '';
+  return room.localParticipant.sid || room.localParticipant.identity || '';
+}
+function setupTabs() {
+  const tabButtons = Array.from(document.querySelectorAll(".tabBtn"));
+  const panes = Array.from(document.querySelectorAll(".tabPane"));
+  if (tabButtons.length === 0 || panes.length === 0) return;
+
+  function setActive(tab) {
+    tabButtons.forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+    panes.forEach((p) => p.classList.toggle("active", p.dataset.tab === tab));
   }
+
+  tabButtons.forEach((btn) => {
+    if (btn.dataset.tabsBound === "1") return;
+    btn.dataset.tabsBound = "1";
+    btn.addEventListener("click", () => setActive(btn.dataset.tab));
+  });
+
+  // default
+  const activeBtn = tabButtons.find((b) => b.classList.contains("active")) || tabButtons[0];
+  if (activeBtn) setActive(activeBtn.dataset.tab);
+}
+
+function setupSettingsDrawer() {
+  const drawer = els.settingsDrawer;
+  const openBtn = els.settingsBtn;
+  const closeBtn = els.settingsClose;
+
+  if (!drawer || !openBtn || !closeBtn) return;
+
+  const open = () => drawer.classList.remove("hidden");
+  const close = () => drawer.classList.add("hidden");
+
+  openBtn.addEventListener("click", open);
+  closeBtn.addEventListener("click", close);
+
+  // ESC ile kapat
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+}
+
+function bindWindowControls() {
+  const controls = window.windowControls;
+  if (!controls) return;
+  els.winMinimize?.addEventListener('click', () => {
+    void controls.minimize();
+  });
+  els.winMaximize?.addEventListener('click', () => {
+    void controls.maximize();
+  });
+  els.winFullscreen?.addEventListener('click', () => {
+    void controls.toggleFullscreen();
+  });
+  els.winClose?.addEventListener('click', () => {
+    void controls.close();
+  });
+}
+
+function updateButtons() {
+  const inRoom = Boolean(room && room.state === 'connected' && currentRoomId);
+  if (els.joinBtn) els.joinBtn.disabled = inRoom || isJoining;
+  if (els.createBtn) els.createBtn.disabled = inRoom || isJoining;
+  if (els.leaveBtn) els.leaveBtn.disabled = !inRoom || isJoining;
+  if (els.muteBtn) els.muteBtn.disabled = !inRoom || !localAudioTrack;
+  if (els.screenShareBtn) els.screenShareBtn.disabled = !inRoom || screenTracks.length > 0;
+  if (els.screenStopBtn) els.screenStopBtn.disabled = !inRoom || screenTracks.length === 0;
+  if (els.roomId) els.roomId.disabled = inRoom || isJoining;
+  if (els.nicknameInput) els.nicknameInput.disabled = inRoom || isJoining;
 }
 
 function updateMuteButton() {
@@ -989,315 +489,543 @@ function updateMuteButton() {
 
 function updateSpeakerButton() {
   if (!els.speakerBtn) return;
-  els.speakerBtn.textContent = isSpeakerMuted ? t.speakerOff : t.speakerOn;
-}
-
-function updateScreenShareButton() {
-  if (!els.screenShareBtn) return;
-  els.screenShareBtn.textContent = t.screenShareStart;
-  els.screenShareBtn.style.display = isScreenSharing ? 'none' : 'inline-flex';
-  if (els.screenStopBtn) {
-    els.screenStopBtn.textContent = t.screenShareStop;
-    els.screenStopBtn.style.display = isScreenSharing ? 'inline-flex' : 'none';
-    els.screenStopBtn.disabled = !isScreenSharing;
-  }
+  els.speakerBtn.textContent = isDeaf ? 'Sesi Aç' : 'Sesi Kapat';
 }
 
 function updateStatusBar() {
   if (els.statusConn) {
-    const connected = socket && socket.connected;
-    els.statusConn.textContent = `Bağlı: ${connected ? 'Evet' : 'Hayır'}`;
+    els.statusConn.textContent = `Bağlı: ${room && room.state === 'connected' ? 'Evet' : 'Hayır'}`;
   }
-  if (els.statusPing) {
-    const rawPing = socket && socket.io && typeof socket.io.engine?.ping === 'number'
-      ? Math.round(socket.io.engine.ping)
-      : null;
-    const pingText = rawPing === null
-      ? (socket && socket.connected ? 'Ölçülüyor...' : '-')
-      : `${rawPing} ms`;
-    els.statusPing.textContent = `Ping: ${pingText}`;
-  }
+  if (els.statusPing) els.statusPing.textContent = 'Ping: SFU';
   if (els.statusMic) {
-    const micState = currentMicTrack && !isMuted ? 'Açık' : 'Sessiz';
-    els.statusMic.textContent = `Mikrofon: ${micState}`;
+    const state = isMuted ? 'Sessiz' : 'Açık';
+    const noise = noiseReductionEnabled ? 'Gurultu Azaltma Açık' : 'Gurultu Azaltma Kapalı';
+    els.statusMic.textContent = `Mikrofon: ${state} (${noise})`;
   }
-  if (els.statusScreen) {
-    els.statusScreen.textContent = `Ekran: ${isScreenSharing ? 'Açık' : 'Kapalı'}`;
-  }
+  if (els.statusScreen) els.statusScreen.textContent = `Ekran: ${screenTracks.length > 0 ? 'Açık' : 'Kapalı'}`;
 }
 
-function setView(nextView) {
-  currentView = nextView;
-  if (els.lobbyView) {
-    els.lobbyView.classList.toggle('active', nextView === 'lobby');
+function updateScreenStatusText(text) {
+  if (els.screenStatus) els.screenStatus.textContent = text;
+}
+
+function syncAudioSettingsUi() {
+  if (els.micGain) els.micGain.value = String(audioSettings.micGain);
+  if (els.highPassFreq) els.highPassFreq.value = String(audioSettings.highPassHz);
+  if (els.gateThreshold) els.gateThreshold.value = String(audioSettings.gateThresholdDb);
+  if (els.gateAttack) els.gateAttack.value = String(audioSettings.gateAttackMs);
+  if (els.gateRelease) els.gateRelease.value = String(audioSettings.gateReleaseMs);
+  if (els.gateFloor) els.gateFloor.value = String(audioSettings.gateFloorDb);
+  if (els.agcToggle) els.agcToggle.checked = Boolean(audioSettings.agcEnabled);
+  if (els.compressorToggle) els.compressorToggle.checked = Boolean(audioSettings.compressorEnabled);
+
+  if (els.micGainValue) els.micGainValue.textContent = `${Math.round(audioSettings.micGain)}%`;
+  if (els.highPassValue) els.highPassValue.textContent = `${Math.round(audioSettings.highPassHz)} Hz`;
+  if (els.gateThresholdValue) els.gateThresholdValue.textContent = `${Math.round(audioSettings.gateThresholdDb)} dB`;
+  if (els.gateAttackValue) els.gateAttackValue.textContent = `${Math.round(audioSettings.gateAttackMs)} ms`;
+  if (els.gateReleaseValue) els.gateReleaseValue.textContent = `${Math.round(audioSettings.gateReleaseMs)} ms`;
+  if (els.gateFloorValue) els.gateFloorValue.textContent = `${Math.round(audioSettings.gateFloorDb)} dB`;
+}
+
+async function republishMicTrackSoon() {
+  if (!room || room.state !== 'connected') return;
+  republishMicPending = true;
+  if (republishMicBusy) return;
+  republishMicBusy = true;
+  while (republishMicPending) {
+    republishMicPending = false;
+    try {
+      await createAndPublishMicTrack();
+    } catch (err) {
+      setStatus(`Mikrofon güncellenemedi: ${err && err.message ? err.message : err}`);
+    }
   }
-  if (els.roomView) {
-    els.roomView.classList.toggle('active', nextView === 'room');
+  republishMicBusy = false;
+}
+
+function scheduleMicRepublish(delayMs = 180) {
+  if (republishMicTimer) {
+    window.clearTimeout(republishMicTimer);
   }
-  if (nextView === 'lobby' && els.settingsDrawer) {
-    els.settingsDrawer.classList.add('hidden');
+  republishMicTimer = window.setTimeout(() => {
+    republishMicTimer = null;
+    void republishMicTrackSoon();
+  }, delayMs);
+}
+
+function ensureParticipantState(participant) {
+  const sid = participant.sid;
+  if (!participantState.has(sid)) {
+    participantState.set(sid, {
+      identity: participant.identity || sid,
+      name: getDisplayName(participant),
+      isScreenSharing: false,
+      isMuted: false,
+      isDeaf: false,
+      lastSpokeAt: 0
+    });
   }
+  return participantState.get(sid);
+}
+
+function clearTrackElement(trackSid) {
+  const info = trackElements.get(trackSid);
+  if (!info) return;
+  if (info.element) {
+    info.element.srcObject = null;
+    info.element.remove();
+  }
+  trackElements.delete(trackSid);
+  renderAudioControls();
+}
+
+function clearParticipantTracks(participantSid) {
+  const toDelete = [];
+  trackElements.forEach((value, key) => {
+    if (value.participantSid === participantSid) toDelete.push(key);
+  });
+  toDelete.forEach((sid) => clearTrackElement(sid));
+}
+
+function renderParticipants() {
+  if (!els.usersList) return;
+  els.usersList.innerHTML = '';
+
+  const rows = [];
+  if (room && room.localParticipant) {
+    rows.push({
+      sid: room.localParticipant.sid,
+      name: currentNickname || getDisplayName(room.localParticipant),
+      self: true,
+      isScreenSharing: screenTracks.length > 0,
+      isMuted,
+      isDeaf,
+      lastSpokeAt: localLastSpokeAt
+    });
+  }
+  participantState.forEach((state, sid) => {
+    rows.push({
+      sid,
+      name: state.name,
+      self: false,
+      isScreenSharing: state.isScreenSharing,
+      isMuted: state.isMuted,
+      isDeaf: state.isDeaf,
+      lastSpokeAt: state.lastSpokeAt || 0
+    });
+  });
+
+  if (rows.length === 0) {
+    const li = document.createElement('li');
+    li.textContent = t.participantsEmpty;
+    els.usersList.appendChild(li);
+    return;
+  }
+
+  rows.forEach((row) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    const isSpeakingNow = activeSpeakerIds.has(row.sid)
+      || (Date.now() - Number(row.lastSpokeAt || 0)) < SPEAKING_GLOW_HOLD_MS
+      || (row.self && Boolean(room?.localParticipant?.isSpeaking));
+    if (isSpeakingNow) {
+      name.className = 'speakingNameGlow';
+    }
+    name.textContent = `${row.name}${row.self ? ' (sen)' : ''}`;
+    li.appendChild(name);
+    if (row.isMuted) li.appendChild(document.createTextNode(' 🙊'));
+    if (row.isDeaf) li.appendChild(document.createTextNode(' 🙉'));
+    if (row.isScreenSharing) li.appendChild(document.createTextNode(' 🖥️(Ekran Paylaşıyor)'));
+    els.usersList.appendChild(li);
+  });
+  updateModerationTargets();
+  renderAudioControls();
+}
+
+function appendChatMessage({ nickname, text, ts, system = false }) {
+  if (!els.chatMessages) return;
+  const item = document.createElement('div');
+  item.className = 'chatLine';
+  const time = ts ? new Date(ts).toLocaleTimeString() : new Date().toLocaleTimeString();
+  item.textContent = system ? `[${time}] ${text}` : `[${time}] ${nickname}: ${text}`;
+  els.chatMessages.appendChild(item);
+  els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+}
+
+function notifyUnavailable(featureName) {
+  const text = `${featureName} bu sürümde henüz aktif değil.`;
+  setStatus(text);
+  appendChatMessage({ system: true, text, ts: Date.now() });
+}
+
+function getSelectedModerationTarget() {
+  return String(els.moderationTarget && els.moderationTarget.value ? els.moderationTarget.value : '').trim();
 }
 
 function updateModerationTargets() {
   if (!els.moderationTarget) return;
+  const previous = getSelectedModerationTarget();
   els.moderationTarget.innerHTML = '';
-  const options = Array.from(participants.entries())
-    .filter(([id]) => !socket || id !== socket.id)
-    .map(([id, nickname]) => ({ id, nickname }));
-  if (options.length === 0) {
-    const empty = document.createElement('option');
-    empty.value = '';
-    empty.textContent = 'Kullanıcı yok';
-    els.moderationTarget.appendChild(empty);
-    return;
-  }
-  options.forEach((user) => {
+  participantState.forEach((state, sid) => {
     const option = document.createElement('option');
-    option.value = user.id;
-    option.textContent = `${user.nickname} (${user.id.slice(0, 4)})`;
+    option.value = sid;
+    option.textContent = `${state.name} (${sid.slice(0, 6)})`;
     els.moderationTarget.appendChild(option);
   });
-}
-
-function updateModerationUI() {
-  const isHost = socket && currentHostId && socket.id === currentHostId;
-  if (els.muteOtherBtn) els.muteOtherBtn.disabled = !isHost;
-  if (els.unmuteOtherBtn) els.unmuteOtherBtn.disabled = !isHost;
-  if (els.kickBtn) els.kickBtn.disabled = !isHost;
-  if (els.banBtn) els.banBtn.disabled = !isHost;
-  if (els.slowModeBtn) els.slowModeBtn.disabled = !isHost;
-  if (els.moderationTarget) els.moderationTarget.disabled = !isHost;
-  if (els.slowModeSelect) els.slowModeSelect.disabled = !isHost;
-  if (els.moderationPanel) {
-    els.moderationPanel.style.display = isHost ? 'block' : 'none';
+  if (previous) {
+    els.moderationTarget.value = previous;
   }
 }
 
-function setActiveTab(tabName) {
-  let target = tabName || 'chat';
-  const targetPane = document.querySelector(`.tabPane[data-tab="${target}"]`);
-  if (!targetPane) target = 'chat';
-  activeTab = target;
-  const tabs = document.querySelectorAll('.tabBtn');
-  const panes = document.querySelectorAll('.tabPane');
-  tabs.forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.tab === target);
-  });
-  panes.forEach((pane) => {
-    pane.classList.toggle('active', pane.dataset.tab === target);
-  });
-  localStorage.setItem(TAB_SETTINGS_KEY, target);
+function getParticipantVolumeKey(participantOrSid) {
+  if (!participantOrSid) return '';
+  if (typeof participantOrSid === 'string') return participantOrSid;
+  return participantOrSid.identity || participantOrSid.sid || '';
 }
 
-function initTabs() {
-  const saved = localStorage.getItem(TAB_SETTINGS_KEY);
-  setActiveTab(saved || 'chat');
-  const tabs = document.querySelectorAll('.tabBtn');
-  tabs.forEach((btn) => {
-    btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
+function getParticipantAudioElementsByKey(volumeKey) {
+  const list = [];
+  trackElements.forEach((value) => {
+    if (value.kind !== 'audio') return;
+    const key = value.participantIdentity || value.participantSid;
+    if (key === volumeKey) {
+      list.push(value.element);
+    }
+  });
+  return list;
+}
+
+function getParticipantVolume(volumeKey) {
+  const value = participantAudioVolume.get(volumeKey);
+  return Number.isFinite(value) ? Math.max(0, Math.min(2, value)) : 1;
+}
+
+function applyParticipantVolume(volumeKey) {
+  const volume = getParticipantVolume(volumeKey);
+  const audioEls = getParticipantAudioElementsByKey(volumeKey);
+  const globallyMuted = isRemoteAudioMuted();
+  const forceMuteByVolume = volume <= 0.0001;
+  audioEls.forEach((audioEl) => {
+    audioEl.volume = Math.max(0, Math.min(1, volume));
+    audioEl.muted = globallyMuted || forceMuteByVolume;
   });
 }
 
-function setScreenStatusText(text) {
-  if (!els.screenStatus) return;
-  els.screenStatus.textContent = text;
-}
-
-function setScreenVideoStream(stream, ownerId) {
-  if (!els.screenVideo) return;
-  els.screenVideo.srcObject = stream || null;
-  activeScreenPeerId = stream ? ownerId : null;
-  if (els.screenPreview) {
-    els.screenPreview.classList.toggle('hasStream', Boolean(stream));
-  }
-  if (deviceSettings.outputId && els.screenVideo.setSinkId) {
-    els.screenVideo.setSinkId(deviceSettings.outputId).catch(() => {});
-  }
-  if (els.screenModalVideo) {
-    els.screenModalVideo.srcObject = isScreenModalOpen ? (stream || null) : null;
-  }
-  if (els.screenModal && els.screenModalStatus) {
-    els.screenModalStatus.textContent = stream ? '' : t.screenShareEmpty;
-    els.screenModal.querySelector('.screenModalBody')?.classList.toggle('hasStream', Boolean(stream));
-  }
-  updateFullscreenButton();
-}
-
-function clearScreenVideo(message) {
-  if (isScreenModalOpen) closeScreenModal();
-  setScreenVideoStream(null, null);
-  setScreenStatusText(message || t.screenShareEmpty);
-}
-
-function hasWindowControls() {
-  return Boolean(window.windowControls && typeof window.windowControls.minimize === 'function');
-}
-
-function applyWindowState(nextState) {
-  if (!nextState) return;
-  windowState = {
-    isMaximized: Boolean(nextState.isMaximized),
-    isFullScreen: Boolean(nextState.isFullScreen)
-  };
-  document.body.classList.toggle('window-maximized', windowState.isMaximized);
-  document.body.classList.toggle('window-fullscreen', windowState.isFullScreen);
-  updateWindowControls();
-}
-
-function updateWindowControls() {
-  if (els.winMaximize) {
-    els.winMaximize.textContent = windowState.isMaximized ? 'REST' : 'MAX';
-    els.winMaximize.title = windowState.isMaximized ? 'Restore' : 'Maximize';
-  }
-  if (els.winFullscreen) {
-    els.winFullscreen.textContent = windowState.isFullScreen ? 'EXIT' : 'FULL';
-    els.winFullscreen.title = windowState.isFullScreen ? 'Exit Fullscreen' : 'Fullscreen';
-  }
-}
-
-async function syncWindowState() {
-  if (!hasWindowControls()) return;
-  try {
-    const [isMaximized, isFullScreen] = await Promise.all([
-      window.windowControls.isMaximized(),
-      window.windowControls.isFullScreen()
-    ]);
-    applyWindowState({ isMaximized, isFullScreen });
-  } catch (_) {
-    // ignore state sync errors
-  }
-}
-
-function initWindowControls() {
-  if (!hasWindowControls()) return;
-  if (els.winMinimize) {
-    els.winMinimize.addEventListener('click', () => {
-      window.windowControls.minimize();
+function renderAudioControls() {
+  if (!els.audioList) return;
+  els.audioList.innerHTML = '';
+  const rows = [];
+  if (room && room.remoteParticipants && room.remoteParticipants.size > 0) {
+    room.remoteParticipants.forEach((participant) => {
+      const participantSid = participant && participant.sid ? participant.sid : '';
+      if (!participantSid) return;
+      const state = participantState.get(participantSid);
+      rows.push({
+        sid: participantSid,
+        volumeKey: getParticipantVolumeKey(participant),
+        name: state ? state.name : getDisplayName(participant)
+      });
+    });
+  } else {
+    participantState.forEach((state, sid) => {
+      rows.push({ sid, volumeKey: state?.identity || sid, name: state.name });
     });
   }
-  if (els.winMaximize) {
-    els.winMaximize.addEventListener('click', async () => {
-      if (windowState.isFullScreen && window.windowControls.setFullscreen) {
-        await window.windowControls.setFullscreen(false);
-      }
-      window.windowControls.maximize();
-    });
-  }
-  if (els.winFullscreen) {
-    els.winFullscreen.addEventListener('click', () => {
-      window.windowControls.toggleFullscreen();
-    });
-  }
-  if (els.winClose) {
-    els.winClose.addEventListener('click', () => {
-      window.windowControls.close();
-    });
-  }
-  if (els.titlebar) {
-    els.titlebar.addEventListener('dblclick', (event) => {
-      if (event.target && event.target.closest('.windowControls')) return;
-      if (windowState.isFullScreen) return;
-      window.windowControls.maximize();
-    });
-  }
-  if (typeof window.windowControls.onStateChange === 'function') {
-    window.windowControls.onStateChange((state) => {
-      applyWindowState(state);
-      if (!state.isFullScreen && isFullscreenActive() && videoRequestedWindowFullscreen) {
-        void exitDomFullscreen();
-        videoRequestedWindowFullscreen = false;
-      }
-    });
-  }
-  void syncWindowState();
-}
 
-function isFullscreenActive() {
-  return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
-}
-
-function updateFullscreenButton() {
-  if (!els.screenFullscreenBtn) return;
-  const hasStream = Boolean(els.screenVideo && els.screenVideo.srcObject);
-  els.screenFullscreenBtn.style.display = hasStream ? 'inline-flex' : 'none';
-  els.screenFullscreenBtn.textContent = isScreenModalOpen ? t.fullscreenExit : t.fullscreenEnter;
-}
-
-function handleDomFullscreenChange() {
-  const domActive = isFullscreenActive();
-  updateFullscreenButton();
-  if (domActive && !windowState.isFullScreen) {
-    void ensureWindowFullscreen(true);
+  if (rows.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'mutedText';
+    empty.textContent = 'Henüz bağlantı yok.';
+    els.audioList.appendChild(empty);
     return;
   }
-  if (!domActive && videoRequestedWindowFullscreen) {
-    if (hasWindowControls() && window.windowControls.setFullscreen) {
-      void window.windowControls.setFullscreen(false);
+
+  rows.forEach((rowData) => {
+    const sid = rowData.sid;
+    const volumeKey = rowData.volumeKey || sid;
+    const row = document.createElement('div');
+    row.className = 'audioCard';
+
+    const top = document.createElement('div');
+    top.className = 'audioHeader';
+    top.textContent = `${rowData.name}`;
+    const volumeBadge = document.createElement('span');
+    volumeBadge.className = 'mutedText';
+    const setVolumeBadge = (value) => {
+      volumeBadge.textContent = `${Math.round(value)}%`;
+    };
+    setVolumeBadge(getParticipantVolume(volumeKey) * 100);
+    top.appendChild(volumeBadge);
+    if (isDeaf) {
+      const globalMuteBadge = document.createElement('span');
+      globalMuteBadge.className = 'mutedText';
+      globalMuteBadge.textContent = 'global muted';
+      top.appendChild(globalMuteBadge);
     }
-    videoRequestedWindowFullscreen = false;
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = '200';
+    slider.step = '1';
+    slider.value = String(Math.round(getParticipantVolume(volumeKey) * 100));
+    slider.addEventListener('input', () => {
+      const next = Math.max(0, Math.min(200, Number(slider.value || 100)));
+      participantAudioVolume.set(volumeKey, next / 100);
+      setVolumeBadge(next);
+      applyParticipantVolume(volumeKey);
+    });
+    slider.addEventListener('change', () => {
+      const next = Math.max(0, Math.min(200, Number(slider.value || 100)));
+      participantAudioVolume.set(volumeKey, next / 100);
+      setVolumeBadge(next);
+      applyParticipantVolume(volumeKey);
+    });
+
+    row.appendChild(top);
+    row.appendChild(slider);
+    els.audioList.appendChild(row);
+  });
+  rows.forEach((rowData) => {
+    applyParticipantVolume(rowData.volumeKey || rowData.sid);
+  });
+}
+
+function getNoiseConstraintProfile() {
+  return {
+    echoCancellation: noiseReductionEnabled,
+    noiseSuppression: noiseReductionEnabled,
+    autoGainControl: Boolean(audioSettings.agcEnabled),
+    channelCount: 1,
+    sampleRate: 48000,
+    sampleSize: 16
+  };
+}
+
+function getPublishedMicMediaTrack(trackLike) {
+  if (!trackLike) return null;
+  return trackLike.mediaStreamTrack || trackLike;
+}
+
+function cleanupLocalMicProcessing() {
+  if (localMicProcessSource) {
+    try {
+      localMicProcessSource.disconnect();
+    } catch (_) {}
+    localMicProcessSource = null;
+  }
+  if (localMicGateNode) {
+    try {
+      localMicGateNode.disconnect();
+    } catch (_) {}
+    localMicGateNode = null;
+  }
+  if (localMicCompressorNode) {
+    try {
+      localMicCompressorNode.disconnect();
+    } catch (_) {}
+    localMicCompressorNode = null;
+  }
+  if (localMicHighPassNode) {
+    try {
+      localMicHighPassNode.disconnect();
+    } catch (_) {}
+    localMicHighPassNode = null;
+  }
+  if (localMicGainNode) {
+    try {
+      localMicGainNode.disconnect();
+    } catch (_) {}
+    localMicGainNode = null;
+  }
+  if (localMicProcessDestination) {
+    localMicProcessDestination = null;
+  }
+  if (localMicProcessCtx) {
+    try {
+      localMicProcessCtx.close();
+    } catch (_) {}
+    localMicProcessCtx = null;
+  }
+  if (localMicInputStream) {
+    localMicInputStream.getTracks().forEach((track) => track.stop());
+    localMicInputStream = null;
   }
 }
 
-function getFullscreenTarget() {
-  return (
-    els.screenVideo ||
-    els.screenPreview ||
-    document.getElementById('screenPreviewVideo') ||
-    document.querySelector('video#screenPreview') ||
-    document.getElementById('screenVideo') ||
-    document.querySelector('.screenPreview video')
-  );
-}
-
-async function requestDomFullscreen(target) {
-  if (!target) throw new Error('Fullscreen target missing');
-  if (target.requestFullscreen) return target.requestFullscreen();
-  if (target.webkitRequestFullscreen) return target.webkitRequestFullscreen();
-  if (target.mozRequestFullScreen) return target.mozRequestFullScreen();
-  if (target.msRequestFullscreen) return target.msRequestFullscreen();
-  throw new Error('Fullscreen API unsupported');
-}
-
-async function exitDomFullscreen() {
-  if (document.exitFullscreen) return document.exitFullscreen();
-  if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
-  return undefined;
-}
-
-async function ensureWindowFullscreen(enabled) {
-  if (!hasWindowControls() || typeof window.windowControls.setFullscreen !== 'function') {
-    return false;
+async function ensureNoiseGateWorklet(ctx) {
+  if (!ctx || noiseGateWorkletReady) return;
+  const candidates = [
+    './noise-gate-worklet.js',
+    new URL('./noise-gate-worklet.js', window.location.href).toString(),
+    new URL('./renderer/noise-gate-worklet.js', window.location.href).toString()
+  ];
+  for (const moduleUrl of candidates) {
+    try {
+      await ctx.audioWorklet.addModule(moduleUrl);
+      noiseGateWorkletReady = true;
+      return;
+    } catch (_) {}
   }
+  noiseGateWorkletReady = false;
+}
+
+function applyLiveMicProcessingSettings() {
+  if (localMicGainNode) {
+    localMicGainNode.gain.setValueAtTime(Math.max(0, Number(audioSettings.micGain) || 0) / 100, localMicProcessCtx?.currentTime || 0);
+  }
+  if (localMicHighPassNode) {
+    localMicHighPassNode.frequency.setValueAtTime(
+      Math.max(60, Math.min(200, Number(audioSettings.highPassHz) || 90)),
+      localMicProcessCtx?.currentTime || 0
+    );
+  }
+  if (localMicGateNode && localMicProcessCtx) {
+    const now = localMicProcessCtx.currentTime;
+    localMicGateNode.parameters.get('threshold')?.setValueAtTime(Number(audioSettings.gateThresholdDb), now);
+    localMicGateNode.parameters.get('attack')?.setValueAtTime(Number(audioSettings.gateAttackMs), now);
+    localMicGateNode.parameters.get('release')?.setValueAtTime(Number(audioSettings.gateReleaseMs), now);
+    localMicGateNode.parameters.get('floor')?.setValueAtTime(Number(audioSettings.gateFloorDb), now);
+    return true;
+  }
+  return false;
+}
+
+async function createOutgoingMicTrack() {
+  cleanupLocalMicProcessing();
+  const constraints = getNoiseConstraintProfile();
+  const audioConstraints = { ...constraints };
+  if (deviceSettings.micId) {
+    audioConstraints.deviceId = { exact: deviceSettings.micId };
+  }
+  localMicInputStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+  const rawTrack = localMicInputStream.getAudioTracks()[0];
+  if (!rawTrack) throw new Error('Mikrofon track alınamadı');
+
   try {
-    const next = await window.windowControls.setFullscreen(Boolean(enabled));
-    if (enabled) videoRequestedWindowFullscreen = true;
-    return Boolean(next);
+    localMicProcessCtx = new AudioContext();
+    if (localMicProcessCtx.state === 'suspended') {
+      await localMicProcessCtx.resume().catch(() => {});
+    }
+    localMicProcessSource = localMicProcessCtx.createMediaStreamSource(localMicInputStream);
+    localMicGainNode = localMicProcessCtx.createGain();
+    localMicGainNode.gain.value = Math.max(0, Number(audioSettings.micGain) || 0) / 100;
+    localMicHighPassNode = localMicProcessCtx.createBiquadFilter();
+    localMicHighPassNode.type = 'highpass';
+    localMicHighPassNode.frequency.value = Math.max(60, Math.min(200, Number(audioSettings.highPassHz) || 90));
+    let chainTail = localMicHighPassNode;
+
+    if (audioSettings.compressorEnabled) {
+      localMicCompressorNode = localMicProcessCtx.createDynamicsCompressor();
+      localMicCompressorNode.threshold.value = -22;
+      localMicCompressorNode.knee.value = 18;
+      localMicCompressorNode.ratio.value = 3.2;
+      localMicCompressorNode.attack.value = 0.003;
+      localMicCompressorNode.release.value = 0.17;
+      chainTail.connect(localMicCompressorNode);
+      chainTail = localMicCompressorNode;
+    }
+
+    localMicProcessDestination = localMicProcessCtx.createMediaStreamDestination();
+    await ensureNoiseGateWorklet(localMicProcessCtx);
+
+    if (noiseGateWorkletReady) {
+      localMicGateNode = new AudioWorkletNode(localMicProcessCtx, 'noise-gate', {
+        parameterData: {
+          threshold: Number(audioSettings.gateThresholdDb),
+          hysteresisDb: 6,
+          attack: Number(audioSettings.gateAttackMs),
+          release: Number(audioSettings.gateReleaseMs),
+          floor: Number(audioSettings.gateFloorDb)
+        }
+      });
+      localMicProcessSource.connect(localMicGainNode).connect(localMicHighPassNode);
+      chainTail.connect(localMicGateNode).connect(localMicProcessDestination);
+    } else {
+      // Fallback: no worklet support, keep only high-pass cleanup.
+      localMicProcessSource.connect(localMicGainNode).connect(localMicHighPassNode).connect(localMicProcessDestination);
+    }
+    applyLiveMicProcessingSettings();
+
+    const processedTrack = localMicProcessDestination.stream.getAudioTracks()[0];
+    if (processedTrack) return processedTrack;
   } catch (_) {
-    return false;
+    // Fallback to raw track below.
   }
+  return rawTrack;
+}
+
+function publishData(payload) {
+  if (!room || room.state !== 'connected') return;
+  const encoder = new TextEncoder();
+  const binary = encoder.encode(JSON.stringify(payload));
+  room.localParticipant.publishData(binary, { reliable: true }).catch((err) => {
+    log(`Data publish hatası: ${err.message || err}`);
+  });
+}
+
+function sendChat(text) {
+  const payload = {
+    type: 'chat',
+    from: {
+      id: getLocalParticipantId(),
+      name: currentNickname || 'Ben'
+    },
+    text,
+    ts: Date.now()
+  };
+  publishData(payload);
+  appendChatMessage({ nickname: payload.from.name, text: payload.text, ts: payload.ts });
+}
+
+function sendCommand(name, payload = {}) {
+  publishData({
+    type: 'cmd',
+    name,
+    payload,
+    ts: Date.now()
+  });
+}
+
+function broadcastPresenceState() {
+  sendCommand('presence', {
+    isMuted,
+    isDeaf,
+    isScreenSharing: screenTracks.length > 0
+  });
+}
+
+function isRemoteAudioMuted() {
+  return Boolean(isDeaf || isSpeakerMuted);
+}
+
+function applyRemoteAudioMuteState() {
+  const globallyMuted = isRemoteAudioMuted();
+  trackElements.forEach((value) => {
+    if (value.kind === 'audio') {
+      const participantVolume = getParticipantVolume(value.participantIdentity || value.participantSid);
+      const forceMuteByVolume = participantVolume <= 0.0001;
+      value.element.muted = globallyMuted || forceMuteByVolume;
+    }
+  });
 }
 
 function openScreenModal() {
   if (!els.screenModal || !els.screenModalVideo) {
-    log('Modal açılamadı: modal elementleri bulunamadı.');
-    setStatus('Modal açılamadı: element bulunamadı.');
+    const fallback = els.screenPreview || els.screenVideo;
+    if (fallback && fallback.requestFullscreen) {
+      void fallback.requestFullscreen().catch(() => {});
+    }
     return;
   }
-  const stream = (els.screenVideo && els.screenVideo.srcObject) || screenStream;
+  const stream = els.screenVideo ? els.screenVideo.srcObject : null;
   els.screenModal.classList.remove('hidden');
   els.screenModal.style.display = 'flex';
-  if (els.screenPreview) {
-    els.screenPreview.classList.add('modal-active');
-  }
   els.screenModalVideo.srcObject = stream || null;
   if (els.screenModalStatus) {
     els.screenModalStatus.textContent = stream ? '' : t.screenShareEmpty;
   }
-  els.screenModal.querySelector('.screenModalBody')?.classList.toggle('hasStream', Boolean(stream));
   isScreenModalOpen = true;
-  updateFullscreenButton();
-  log(`Modal açıldı. Stream var mı: ${Boolean(stream)}`);
 }
 
 function closeScreenModal() {
@@ -1305,92 +1033,889 @@ function closeScreenModal() {
   els.screenModal.classList.add('hidden');
   els.screenModal.style.removeProperty('display');
   els.screenModalVideo.srcObject = null;
-  if (els.screenPreview) {
-    els.screenPreview.classList.remove('modal-active');
-  }
-  els.screenModal.querySelector('.screenModalBody')?.classList.remove('hasStream');
   isScreenModalOpen = false;
-  updateFullscreenButton();
 }
 
-function isScreenShareSupported() {
-  return Boolean(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
-}
-
-function setUiState({ inRoom }) {
-  els.roomId.disabled = inRoom;
-  els.joinBtn.disabled = inRoom;
-  els.createBtn.disabled = inRoom;
-  els.leaveBtn.disabled = !inRoom;
-  els.muteBtn.disabled = !inRoom;
-  if (els.serverUrlInput) els.serverUrlInput.disabled = inRoom;
-  if (els.nicknameInput) els.nicknameInput.disabled = inRoom;
-  if (els.chatInput) els.chatInput.disabled = !inRoom;
-  if (els.chatSendBtn) els.chatSendBtn.disabled = !inRoom;
-  if (els.screenShareBtn) els.screenShareBtn.disabled = !inRoom;
-  if (els.screenStopBtn) els.screenStopBtn.disabled = !inRoom;
-}
-
-function renderParticipants() {
-  if (!els.usersList) return;
-  els.usersList.innerHTML = '';
-  if (participants.size === 0) {
-    const li = document.createElement('li');
-    li.textContent = t.participantsEmpty;
-    els.usersList.appendChild(li);
+function setScreenPreviewTrack(track, ownerName) {
+  if (!els.screenVideo) return;
+  if (!track || !viewEnabled) {
+    els.screenVideo.srcObject = null;
+    updateScreenStatusText(t.screenShareEmpty);
     return;
   }
-  participants.forEach((nickname, id) => {
-    const li = document.createElement('li');
-    const isSelf = socket && id === socket.id;
-    const indicators = getParticipantIndicators(id);
-    const suffix = indicators ? ` ${indicators}` : '';
-    li.textContent = isSelf ? `${nickname} (sen)${suffix}` : `${nickname}${suffix}`;
-    els.usersList.appendChild(li);
-  });
+  const mediaTrack = track.mediaStreamTrack || track;
+  const stream = new MediaStream([mediaTrack]);
+  els.screenVideo.srcObject = stream;
+  updateScreenStatusText(`${ownerName || 'Katılımcı'} ekran paylaşıyor`);
+  if (isScreenModalOpen && els.screenModalVideo) {
+    els.screenModalVideo.srcObject = stream;
+    if (els.screenModalStatus) els.screenModalStatus.textContent = '';
+  }
+}
+
+function attachRemoteAudio(track, participant) {
+  const sid = participant.sid;
+  const identity = participant.identity || '';
+  const audioEl = track.attach();
+  audioEl.autoplay = true;
+  audioEl.playsInline = true;
+  audioEl.muted = isRemoteAudioMuted();
+  if (deviceSettings.outputId && typeof audioEl.setSinkId === 'function') {
+    audioEl.setSinkId(deviceSettings.outputId).catch(() => {});
+  }
+  ui.audioContainer.appendChild(audioEl);
+  const trackSid = track.sid || `${sid}-audio-${Date.now()}`;
+  trackElements.set(trackSid, { element: audioEl, kind: 'audio', participantSid: sid, participantIdentity: identity });
+  applyParticipantVolume(identity || sid);
+  if (typeof audioEl.play === 'function') {
+    audioEl.play().catch(() => {});
+  }
+}
+
+function attachRemoteVideo(track, participant) {
+  if (!viewEnabled) return;
+  const sid = participant.sid;
+  const videoEl = track.attach();
+  videoEl.autoplay = true;
+  videoEl.playsInline = true;
+  ui.remoteVideoContainer.appendChild(videoEl);
+  const trackSid = track.sid || `${sid}-video-${Date.now()}`;
+  trackElements.set(trackSid, { element: videoEl, kind: 'video', participantSid: sid });
+  const state = participantState.get(sid);
+  if (state) state.isScreenSharing = true;
+  if (!localScreenPreviewTrack) {
+    setScreenPreviewTrack(track, state ? state.name : getDisplayName(participant));
+  }
+}
+
+function handleTrackSubscribed(track, _publication, participant) {
+  if (track.kind === 'audio') {
+    attachRemoteAudio(track, participant);
+    return;
+  }
+  if (track.kind === 'video') {
+    attachRemoteVideo(track, participant);
+  }
+}
+
+function getCurrentRoomCount() {
+  // local participant + active remote participants
+  return 1 + participantState.size;
 }
 
 function renderRoomsList(rooms) {
   if (!els.roomsList) return;
   els.roomsList.innerHTML = '';
   const list = Array.isArray(rooms) ? rooms : [];
-  const sorted = currentRoomId
-    ? [...list].sort((a, b) => {
-      if (a.roomId === currentRoomId) return -1;
-      if (b.roomId === currentRoomId) return 1;
-      return 0;
-    })
-    : list;
-  if (sorted.length === 0) {
+  if (list.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'mutedText';
-    empty.textContent = t.roomsEmpty;
+    empty.textContent = 'Aktif oda yok.';
     els.roomsList.appendChild(empty);
     return;
   }
-  sorted.forEach((room) => {
+  list.forEach((roomInfo) => {
+    const roomName = String(roomInfo && roomInfo.roomName ? roomInfo.roomName : '').trim();
+    if (!roomName) return;
+    const count = Number(roomInfo.count) || 0;
     const item = document.createElement('div');
     item.className = 'roomItem';
-    if (currentRoomId && room.roomId === currentRoomId) {
-      item.classList.add('active');
-    }
-    const name = document.createElement('div');
-    name.className = 'roomName';
-    name.textContent = room.roomId;
-    const count = document.createElement('div');
-    count.className = 'roomCount';
-    count.textContent = `${room.count} kişi`;
-    item.appendChild(name);
-    item.appendChild(count);
+    if (currentRoomId && currentRoomId === roomName) item.classList.add('active');
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'roomName';
+    nameEl.textContent = roomName;
+    const countEl = document.createElement('div');
+    countEl.className = 'roomCount';
+    countEl.textContent = `${count} kişi`;
+    item.appendChild(nameEl);
+    item.appendChild(countEl);
     item.addEventListener('click', () => {
-      if (els.roomId) els.roomId.value = room.roomId;
-      startJoinFlow(room.roomId);
+      if (els.roomId) els.roomId.value = roomName;
+      void handleRoomListClick(roomName);
     });
     els.roomsList.appendChild(item);
   });
-  const activeItem = els.roomsList.querySelector('.roomItem.active');
-  if (activeItem) {
-    activeItem.scrollIntoView({ block: 'nearest' });
+}
+
+function getPreferredNickname() {
+  const fromInput = String(els.nicknameInput && els.nicknameInput.value ? els.nicknameInput.value : '').trim();
+  if (fromInput) return fromInput;
+  if (currentNickname) return String(currentNickname).trim();
+  const stored = String(localStorage.getItem('voice-nickname') || '').trim();
+  return stored;
+}
+
+async function waitUntilRoomClosed(timeoutMs = 3000) {
+  const start = Date.now();
+  while (room && Date.now() - start < timeoutMs) {
+    await new Promise((resolve) => window.setTimeout(resolve, 60));
+  }
+}
+
+async function handleRoomListClick(targetRoomName) {
+  if (!targetRoomName || isJoining) return;
+  const nickname = getPreferredNickname();
+  if (!nickname) {
+    setStatus('Önce takma ad gir, sonra odadan birine tıkla.');
+    return;
+  }
+  if (room && currentRoomId === targetRoomName) {
+    setStatus(`Zaten bu odadasın: ${targetRoomName}`);
+    return;
+  }
+  if (room) {
+    await leaveRoom();
+    await waitUntilRoomClosed();
+  }
+  await joinRoom(targetRoomName, nickname);
+}
+
+async function refreshRoomsList() {
+  try {
+    const response = await fetch(ROOMS_URL);
+    if (!response.ok) throw new Error(`rooms http ${response.status}`);
+    const data = await response.json();
+    renderRoomsList(data && Array.isArray(data.rooms) ? data.rooms : []);
+  } catch (err) {
+    log(`Oda listesi alınamadı: ${err.message || err}`);
+  }
+}
+
+async function sendRoomHeartbeat() {
+  if (!currentRoomId) return;
+  try {
+    await fetch(ROOMS_HEARTBEAT_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        roomName: currentRoomId,
+        count: getCurrentRoomCount()
+      })
+    });
+  } catch (err) {
+    log(`Heartbeat hatası: ${err.message || err}`);
+  }
+}
+
+async function sendRoomHeartbeatCount(roomName, count, options = {}) {
+  const cleanRoom = String(roomName || '').trim();
+  if (!cleanRoom) return;
+  const payload = JSON.stringify({
+    roomName: cleanRoom,
+    count: Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0
+  });
+
+  if (options.useBeacon && navigator.sendBeacon) {
+    try {
+      const blob = new Blob([payload], { type: 'application/json' });
+      navigator.sendBeacon(ROOMS_HEARTBEAT_URL, blob);
+      return;
+    } catch (_) {}
+  }
+
+  try {
+    await fetch(ROOMS_HEARTBEAT_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: payload,
+      keepalive: Boolean(options.keepalive)
+    });
+  } catch (err) {
+    log(`Heartbeat gönderim hatası: ${err.message || err}`);
+  }
+}
+
+async function announceRoomClosed(roomName, options = {}) {
+  await sendRoomHeartbeatCount(roomName, 0, options);
+}
+
+function startRoomHeartbeatLoop() {
+  stopRoomHeartbeatLoop();
+  void sendRoomHeartbeat();
+  roomHeartbeatIntervalId = window.setInterval(() => {
+    void sendRoomHeartbeat();
+  }, 10000);
+}
+
+function stopRoomHeartbeatLoop() {
+  if (!roomHeartbeatIntervalId) return;
+  window.clearInterval(roomHeartbeatIntervalId);
+  roomHeartbeatIntervalId = null;
+}
+
+function startRoomListLoop() {
+  stopRoomListLoop();
+  void refreshRoomsList();
+  roomListIntervalId = window.setInterval(() => {
+    void refreshRoomsList();
+  }, 15000);
+}
+
+function stopRoomListLoop() {
+  if (!roomListIntervalId) return;
+  window.clearInterval(roomListIntervalId);
+  roomListIntervalId = null;
+}
+
+function handleTrackUnsubscribed(track, _publication, participant) {
+  const sid = participant.sid;
+  if (track.sid) {
+    clearTrackElement(track.sid);
+  } else {
+    const maybeKey = `${sid}-${track.kind}`;
+    trackElements.forEach((_value, key) => {
+      if (key.includes(maybeKey)) clearTrackElement(key);
+    });
+  }
+  if (track.kind === 'video') {
+    const state = participantState.get(sid);
+    if (state) state.isScreenSharing = false;
+    if (!localScreenPreviewTrack) setScreenPreviewTrack(null);
+  }
+  renderParticipants();
+}
+
+function applyMute() {
+  const mediaTrack = getPublishedMicMediaTrack(localAudioTrack);
+  if (!mediaTrack) return;
+  mediaTrack.enabled = !isMuted;
+  updateMuteButton();
+  updateStatusBar();
+}
+
+function setMutedState(nextMuted, { syncListenOnly = true, broadcast = true, persist = true, notifyLocal = false } = {}) {
+  isMuted = Boolean(nextMuted);
+  if (syncListenOnly && els.listenOnlyToggle) {
+    els.listenOnlyToggle.checked = isMuted;
+  }
+  applyMute();
+  if (notifyLocal) {
+    void playMicToggleSound(isMuted);
+  }
+  renderParticipants();
+  if (broadcast) broadcastPresenceState();
+  if (persist) saveUserPrefs();
+}
+
+function setDeafState(nextDeaf, { syncToggle = true, broadcast = true, persist = true } = {}) {
+  isDeaf = Boolean(nextDeaf);
+  // Keep legacy flag in sync to avoid split behavior.
+  isSpeakerMuted = isDeaf;
+  if (syncToggle && els.deafToggle) {
+    els.deafToggle.checked = isDeaf;
+  }
+  applyRemoteAudioMuteState();
+  updateSpeakerButton();
+  renderParticipants();
+  if (broadcast) broadcastPresenceState();
+  if (persist) saveUserPrefs();
+}
+
+async function createAndPublishMicTrack() {
+  if (!room || room.state !== 'connected') return;
+  const nextTrack = await createOutgoingMicTrack();
+  const publications = Array.from(room.localParticipant.trackPublications.values());
+  for (const publication of publications) {
+    if (publication && publication.kind === 'audio' && publication.track) {
+      try {
+        await room.localParticipant.unpublishTrack(publication.track);
+      } catch (_) {}
+    }
+  }
+  localAudioPublication = await room.localParticipant.publishTrack(nextTrack);
+  localAudioTrack = localAudioPublication && localAudioPublication.track ? localAudioPublication.track : nextTrack;
+  const mediaTrack = getPublishedMicMediaTrack(localAudioTrack);
+  if (mediaTrack) {
+    startMainMicMeter(mediaTrack);
+  }
+  if (mediaTrack && mediaTrack.applyConstraints) {
+    const constraints = getNoiseConstraintProfile();
+    try {
+      await mediaTrack.applyConstraints(constraints);
+    } catch (_) {}
+  }
+  applyMute();
+  broadcastPresenceState();
+  saveUserPrefs();
+}
+
+async function fetchToken(roomName, nickname) {
+  const url = new URL(TOKEN_URL);
+  url.searchParams.set('roomName', roomName);
+  url.searchParams.set('nickname', nickname);
+  url.searchParams.set('id', clientId);
+  const response = await fetch(url.toString());
+  if (!response.ok) throw new Error(`Token alınamadı (${response.status})`);
+  const json = await response.json();
+  if (!json || typeof json.token !== 'string') throw new Error('Token cevabı geçersiz');
+  return json.token;
+}
+
+function resetRoomState() {
+  participantState.clear();
+  activeSpeakerIds.clear();
+  localLastSpokeAt = 0;
+  const existingTrackIds = Array.from(trackElements.keys());
+  existingTrackIds.forEach((trackSid) => clearTrackElement(trackSid));
+  localScreenPreviewTrack = null;
+  setScreenPreviewTrack(null);
+  renderParticipants();
+}
+
+function stopMainMicMeter() {
+  if (mainMicMeterTimer) {
+    window.clearInterval(mainMicMeterTimer);
+    mainMicMeterTimer = null;
+  }
+  if (mainMicMeterSource) {
+    try {
+      mainMicMeterSource.disconnect();
+    } catch (_) {}
+    mainMicMeterSource = null;
+  }
+  mainMicMeterAnalyser = null;
+  if (mainMicMeterCtx) {
+    try {
+      mainMicMeterCtx.close();
+    } catch (_) {}
+    mainMicMeterCtx = null;
+  }
+  if (els.vuFill) els.vuFill.style.width = '0%';
+  if (els.micDb) els.micDb.textContent = '- dB';
+}
+
+function startMainMicMeter(track) {
+  stopMainMicMeter();
+  if (!track) return;
+  try {
+    const stream = new MediaStream([track]);
+    mainMicMeterCtx = new AudioContext();
+    mainMicMeterSource = mainMicMeterCtx.createMediaStreamSource(stream);
+    mainMicMeterAnalyser = mainMicMeterCtx.createAnalyser();
+    mainMicMeterAnalyser.fftSize = 1024;
+    mainMicMeterSource.connect(mainMicMeterAnalyser);
+    const buffer = new Uint8Array(mainMicMeterAnalyser.fftSize);
+    mainMicMeterTimer = window.setInterval(() => {
+      if (!mainMicMeterAnalyser) return;
+      mainMicMeterAnalyser.getByteTimeDomainData(buffer);
+      let peak = 0;
+      for (let i = 0; i < buffer.length; i += 1) {
+        const v = Math.abs(buffer[i] - 128) / 128;
+        if (v > peak) peak = v;
+      }
+      const pct = Math.max(0, Math.min(100, Math.round(peak * 180)));
+      if (els.vuFill) els.vuFill.style.width = `${pct}%`;
+      if (els.micDb) {
+        const db = peak > 0 ? (20 * Math.log10(peak)).toFixed(1) : '-60.0';
+        els.micDb.textContent = `${db} dB`;
+      }
+    }, 120);
+  } catch (_) {
+    if (els.micDb) els.micDb.textContent = '- dB';
+  }
+}
+
+async function playJoinLeaveSound(joined) {
+  try {
+    if (!uiSoundCtx) uiSoundCtx = new AudioContext();
+    if (uiSoundCtx.state === 'suspended') await uiSoundCtx.resume();
+
+    const now = uiSoundCtx.currentTime;
+
+    // master gain (ses seviyesi buradan)
+    const master = uiSoundCtx.createGain();
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.exponentialRampToValueAtTime(0.30, now + 0.015); // Discord benzeri volume
+    master.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    master.connect(uiSoundCtx.destination);
+
+    // 2 notalı küçük arpej hissi
+    const freqs = joined ? [880, 1175] : [1175, 880]; // join yukarı, leave aşağı
+    const gaps = [0.0, 0.075];
+    const dur = 0.15;
+
+    freqs.forEach((f, i) => {
+      const t0 = now + gaps[i];
+
+      // ana ton
+      const osc1 = uiSoundCtx.createOscillator();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(f, t0);
+      // mini pitch slide (daha doğal)
+      osc1.frequency.exponentialRampToValueAtTime(f * (joined ? 1.03 : 0.97), t0 + 0.06);
+
+      // hafif parlaklık (çok düşük)
+      const osc2 = uiSoundCtx.createOscillator();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(f * 2, t0);
+
+      const g = uiSoundCtx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(1.0, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+      osc1.connect(g);
+      osc2.connect(g);
+      g.connect(master);
+
+      osc1.start(t0);
+      osc2.start(t0);
+      osc1.stop(t0 + dur);
+      osc2.stop(t0 + dur);
+    });
+  } catch (_) {}
+}
+
+async function playMicToggleSound(nowMuted) {
+  try {
+    if (!uiSoundCtx) uiSoundCtx = new AudioContext();
+    if (uiSoundCtx.state === 'suspended') {
+      await uiSoundCtx.resume();
+    }
+    const osc = uiSoundCtx.createOscillator();
+    const gain = uiSoundCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(nowMuted ? 360 : 920, uiSoundCtx.currentTime);
+    gain.gain.value = 0.0001;
+    osc.connect(gain).connect(uiSoundCtx.destination);
+    const now = uiSoundCtx.currentTime;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.06, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+    osc.start(now);
+    osc.stop(now + 0.09);
+  } catch (_) {}
+}
+
+function announceJoinLeave(participant, joined) {
+  const name = getDisplayName(participant);
+  const text = joined ? `${name} odaya katıldı` : `${name} odadan ayrıldı`;
+  log(text);
+  appendChatMessage({ system: true, text, ts: Date.now() });
+  void playJoinLeaveSound(joined);
+}
+
+function hydrateParticipantAndTracks(participant) {
+  ensureParticipantState(participant);
+  participant.trackPublications.forEach((publication) => {
+    if (publication.track) {
+      handleTrackSubscribed(publication.track, publication, participant);
+    }
+  });
+}
+
+function handleDataReceived(payload, participant) {
+  let parsed = null;
+  try {
+    const text = new TextDecoder().decode(payload);
+    parsed = JSON.parse(text);
+  } catch (_) {
+    return;
+  }
+  if (!parsed || typeof parsed !== 'object') return;
+
+  if (parsed.type === 'chat') {
+    appendChatMessage({
+      nickname: parsed.from && parsed.from.name ? parsed.from.name : (participant ? getDisplayName(participant) : 'Katılımcı'),
+      text: parsed.text || '',
+      ts: parsed.ts || Date.now()
+    });
+    return;
+  }
+
+  if (parsed.type === 'cmd') {
+    if (parsed.name === 'view_off' || parsed.name === 'view_on') {
+      const targetId = parsed.payload && parsed.payload.targetId ? parsed.payload.targetId : null;
+      const me = getLocalParticipantId();
+      if (!targetId || targetId === me) {
+        void setViewEnabled(parsed.name === 'view_on');
+      }
+    }
+    if (parsed.name === 'share_quality') {
+      const fromSid = participant ? participant.sid : null;
+      if (fromSid && participantState.has(fromSid)) {
+        const state = participantState.get(fromSid);
+        if (parsed.payload && typeof parsed.payload.isScreenSharing === 'boolean') {
+          state.isScreenSharing = parsed.payload.isScreenSharing;
+          renderParticipants();
+        }
+      }
+    }
+    if (parsed.name === 'presence') {
+      const fromSid = participant ? participant.sid : null;
+      if (fromSid) {
+        if (!participantState.has(fromSid) && participant) {
+          ensureParticipantState(participant);
+        }
+        const state = participantState.get(fromSid);
+        if (state) {
+          const payload = parsed.payload || {};
+          state.isMuted = Boolean(payload.isMuted);
+          state.isDeaf = Boolean(payload.isDeaf);
+          if (typeof payload.isScreenSharing === 'boolean') {
+            state.isScreenSharing = payload.isScreenSharing;
+          }
+          renderParticipants();
+        }
+      }
+    }
+    if (parsed.name === 'moderation') {
+      const payload = parsed.payload || {};
+      const targetId = String(payload.targetId || '');
+      const action = String(payload.action || '');
+      if (targetId && targetId === getLocalParticipantId()) {
+        if (action === 'mute') {
+          setMutedState(true);
+          appendChatMessage({ system: true, text: 'Moderasyon: sessize alındın.', ts: Date.now() });
+        } else if (action === 'unmute') {
+          setMutedState(false);
+          appendChatMessage({ system: true, text: 'Moderasyon: sesin açıldı.', ts: Date.now() });
+        } else if (action === 'kick' || action === 'ban') {
+          appendChatMessage({ system: true, text: `Moderasyon: ${action} işlemi uygulandı.`, ts: Date.now() });
+          void leaveRoom();
+        }
+      }
+    }
+    if (parsed.name === 'slowmode') {
+      const payload = parsed.payload || {};
+      const nextMs = Number(payload.ms);
+      chatSlowModeMs = Number.isFinite(nextMs) ? Math.max(0, Math.floor(nextMs)) : 0;
+      appendChatMessage({ system: true, text: `Slow mode: ${chatSlowModeMs}ms`, ts: Date.now() });
+    }
+    if (parsed.name === 'refresh_soft') {
+      if (room) {
+        void createAndPublishMicTrack();
+      }
+    }
+    if (parsed.name === 'refresh_hard') {
+      if (room) {
+        const targetRoom = currentRoomId;
+        const targetNick = currentNickname;
+        void (async () => {
+          await leaveRoom();
+          if (targetRoom && targetNick) await joinRoom(targetRoom, targetNick);
+        })();
+      }
+    }
+  }
+}
+
+function bindRoomEvents(activeRoom) {
+  activeRoom.on(RoomEvent.ParticipantConnected, (participant) => {
+    ensureParticipantState(participant);
+    announceJoinLeave(participant, true);
+    renderParticipants();
+    void sendRoomHeartbeat();
+    broadcastPresenceState();
+  });
+
+  activeRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
+    participantState.delete(participant.sid);
+    activeSpeakerIds.delete(participant.sid);
+    if (room?.localParticipant?.sid === participant.sid) {
+      localLastSpokeAt = 0;
+    }
+    clearParticipantTracks(participant.sid);
+    announceJoinLeave(participant, false);
+    renderParticipants();
+    if (!localScreenPreviewTrack) setScreenPreviewTrack(null);
+    void sendRoomHeartbeat();
+  });
+
+  activeRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    handleTrackSubscribed(track, publication, participant);
+    renderParticipants();
+  });
+
+  activeRoom.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+    handleTrackUnsubscribed(track, publication, participant);
+  });
+
+  activeRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+    activeSpeakerIds.clear();
+    const now = Date.now();
+    speakers.forEach((speaker) => {
+      const speakerSid = String((speaker && (speaker.sid || speaker.participantSid)) || '');
+      if (!speakerSid) return;
+      activeSpeakerIds.add(speakerSid);
+      if (room?.localParticipant?.sid === speakerSid) {
+        localLastSpokeAt = now;
+      }
+      const state = participantState.get(speakerSid);
+      if (state) state.lastSpokeAt = now;
+    });
+    renderParticipants();
+  });
+
+  activeRoom.on(RoomEvent.DataReceived, (payload, participant) => {
+    handleDataReceived(payload, participant || null);
+  });
+
+  activeRoom.on(RoomEvent.Disconnected, () => {
+    stopMainMicMeter();
+    cleanupLocalMicProcessing();
+    stopStatsLoop();
+    const roomNameOnDisconnect = currentRoomId;
+    if (roomNameOnDisconnect) {
+      void announceRoomClosed(roomNameOnDisconnect, { keepalive: true });
+    }
+    stopRoomHeartbeatLoop();
+    room = null;
+    localLastSpokeAt = 0;
+    currentRoomId = null;
+    localAudioTrack = null;
+    localAudioPublication = null;
+    screenTracks = [];
+    screenPublications = [];
+    resetRoomState();
+    setView(false);
+    setStatus('Bağlantı kapandı.');
+    updateButtons();
+    updateStatusBar();
+    void refreshRoomsList();
+  });
+}
+
+async function joinRoom(roomName, nickname) {
+  const cleanRoom = String(roomName || '').trim();
+  const cleanNick = String(nickname || '').trim();
+  if (!cleanRoom || !cleanNick) {
+    setStatus('Oda adı ve takma ad gerekli.');
+    return;
+  }
+  if (room || isJoining) return;
+
+  isJoining = true;
+  updateButtons();
+  setStatus('Katılım başlatılıyor...');
+  try {
+    const token = await fetchToken(cleanRoom, cleanNick);
+    const nextRoom = new Room();
+    bindRoomEvents(nextRoom);
+    await nextRoom.connect(LIVEKIT_URL, token);
+    room = nextRoom;
+    currentRoomId = cleanRoom;
+    currentNickname = cleanNick;
+    saveUserPrefs();
+
+    await createAndPublishMicTrack();
+    room.remoteParticipants.forEach((participant) => {
+      hydrateParticipantAndTracks(participant);
+    });
+
+    renderParticipants();
+    setView(true);
+    setStatus([`Odaya katıldın: ${cleanRoom}`, 'SFU bağlantısı hazır']);
+    appendChatMessage({ system: true, text: `${cleanNick} odaya katıldı`, ts: Date.now() });
+    log(`Room connect başarılı: ${cleanRoom}`);
+    broadcastPresenceState();
+    startRoomHeartbeatLoop();
+    startStatsLoop();
+    void refreshRoomsList();
+  } catch (err) {
+    const message = err && err.message ? err.message : String(err);
+    setStatus(`Katılım hatası: ${message}`);
+    appendChatMessage({ system: true, text: `Katılım hatası: ${message}`, ts: Date.now() });
+    log(`Join hatası: ${message}`);
+    if (room) {
+      room.disconnect();
+      room = null;
+    }
+  } finally {
+    isJoining = false;
+    updateButtons();
+    updateStatusBar();
+  }
+}
+
+async function leaveRoom() {
+  stopStatsLoop();
+  if (!room) return;
+  stopMainMicMeter();
+  cleanupLocalMicProcessing();
+  const roomNameOnLeave = currentRoomId;
+  stopRoomHeartbeatLoop();
+  saveUserPrefs();
+  if (roomNameOnLeave) {
+    await announceRoomClosed(roomNameOnLeave, { keepalive: true });
+  }
+  try {
+    if (screenTracks.length > 0) await stopScreenShare();
+    if (room.localParticipant) {
+      const publications = Array.from(room.localParticipant.trackPublications.values());
+      for (const publication of publications) {
+        if (publication && publication.kind === 'audio' && publication.track) {
+          try {
+            await room.localParticipant.unpublishTrack(publication.track);
+          } catch (_) {}
+          try {
+            publication.track.stop();
+          } catch (_) {}
+        }
+      }
+    }
+  } catch (_) {}
+  room.disconnect();
+  void refreshRoomsList();
+}
+
+async function startScreenShare() {
+  if (!room || screenTracks.length > 0) return;
+  try {
+    const tracks = await createLocalScreenTracks({
+      resolution: { width: 1280, height: 720 }
+    });
+    screenTracks = tracks;
+    screenPublications = [];
+    tracks.forEach((track) => {
+      if (track.kind === 'video') localScreenPreviewTrack = track;
+    });
+    for (const track of tracks) {
+      const publication = await room.localParticipant.publishTrack(track);
+      screenPublications.push(publication);
+      track.onEnded = () => {
+        void stopScreenShare(true);
+      };
+    }
+    if (localScreenPreviewTrack) {
+      setScreenPreviewTrack(localScreenPreviewTrack, currentNickname || 'Sen');
+    }
+    sendCommand('share_quality', { quality: '720p', isScreenSharing: true });
+    broadcastPresenceState();
+    setStatus(t.screenShareStarted);
+    renderParticipants();
+    updateButtons();
+    updateStatusBar();
+  } catch (err) {
+    setStatus(`${t.screenShareError}: ${err.message || err}`);
+    log(`Ekran paylaşım hatası: ${err.message || err}`);
+  }
+}
+
+async function stopScreenShare(fromEnded = false) {
+  if (!room || screenTracks.length === 0) return;
+  const tracksToStop = [...screenTracks];
+  const pubsToUnpublish = [...screenPublications];
+  screenTracks = [];
+  screenPublications = [];
+  localScreenPreviewTrack = null;
+  for (const publication of pubsToUnpublish) {
+    try {
+      await room.localParticipant.unpublishTrack(publication.track);
+    } catch (_) {}
+  }
+  tracksToStop.forEach((track) => track.stop());
+  sendCommand('share_quality', { quality: 'none', isScreenSharing: false });
+  broadcastPresenceState();
+  setScreenPreviewTrack(null);
+  setStatus(fromEnded ? t.screenShareEnded : t.screenShareStopped);
+  renderParticipants();
+  updateButtons();
+  updateStatusBar();
+}
+
+async function setViewEnabled(enabled) {
+  viewEnabled = Boolean(enabled);
+  if (!viewEnabled) {
+    const toDelete = [];
+    trackElements.forEach((value, key) => {
+      if (value.kind === 'video') toDelete.push(key);
+    });
+    toDelete.forEach((trackSid) => clearTrackElement(trackSid));
+    if (!localScreenPreviewTrack) setScreenPreviewTrack(null);
+    return;
+  }
+  if (!room) return;
+  room.remoteParticipants.forEach((participant) => {
+    participant.trackPublications.forEach((publication) => {
+      if (publication.track && publication.track.kind === 'video') {
+        attachRemoteVideo(publication.track, participant);
+      }
+    });
+  });
+}
+
+function handleCommandInput(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return true;
+
+  if (text === '/mute') {
+    setMutedState(!isMuted, { notifyLocal: true });
+    return true;
+  }
+
+  if (text === '/yayın' || text === '/view') {
+    appendChatMessage({
+      system: true,
+      text: `Video izleme: ${viewEnabled ? 'Açık' : 'Kapalı'}`,
+      ts: Date.now()
+    });
+    return true;
+  }
+
+  if (text === '/yayın kapa' || text === '/view_off') {
+    void setViewEnabled(false);
+    sendCommand('view_off', { targetId: getLocalParticipantId() });
+    appendChatMessage({ system: true, text: 'Video izleme kapatıldı. Ses akışı devam ediyor.', ts: Date.now() });
+    return true;
+  }
+
+  if (text === '/yayın aç' || text === '/view_on') {
+    void setViewEnabled(true);
+    sendCommand('view_on', { targetId: getLocalParticipantId() });
+    appendChatMessage({ system: true, text: 'Video izleme açıldı.', ts: Date.now() });
+    return true;
+  }
+
+  if (text.startsWith('/share_quality')) {
+    const quality = text.split(/\s+/)[1] || '720p';
+    sendCommand('share_quality', {
+      quality,
+      isScreenSharing: screenTracks.length > 0
+    });
+    appendChatMessage({ system: true, text: `Paylaşım kalite bildirimi gönderildi: ${quality}`, ts: Date.now() });
+    return true;
+  }
+
+  return false;
+}
+
+async function populateDevices() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  if (els.micSelect) {
+    els.micSelect.innerHTML = '';
+    const mics = devices.filter((d) => d.kind === 'audioinput');
+    mics.forEach((d) => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Mikrofon ${els.micSelect.options.length + 1}`;
+      els.micSelect.appendChild(opt);
+    });
+  }
+  if (els.outputSelect) {
+    els.outputSelect.innerHTML = '';
+    const outputs = devices.filter((d) => d.kind === 'audiooutput');
+    outputs.forEach((d) => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Çıkış ${els.outputSelect.options.length + 1}`;
+      els.outputSelect.appendChild(opt);
+    });
+    if (deviceSettings.outputId) {
+      const hasOutput = outputs.some((d) => d.deviceId === deviceSettings.outputId);
+      if (hasOutput) {
+        els.outputSelect.value = deviceSettings.outputId;
+      }
+    }
+  }
+  if (els.micSelect && deviceSettings.micId) {
+    const mics = devices.filter((d) => d.kind === 'audioinput');
+    const hasMic = mics.some((d) => d.deviceId === deviceSettings.micId);
+    if (hasMic) {
+      els.micSelect.value = deviceSettings.micId;
+    }
   }
 }
 
@@ -1398,1235 +1923,361 @@ function randomRoomId() {
   return Math.random().toString(36).slice(2, 8);
 }
 
-function getAudioConstraints() {
-  const audioConstraints = {
-    echoCancellation: noiseEnabled,
-    noiseSuppression: noiseEnabled,
-    autoGainControl: noiseEnabled && agcEnabled
-  };
-  if (deviceSettings.micId) {
-    audioConstraints.deviceId = { exact: deviceSettings.micId };
+function wireUi() {
+  if (els.serverUrlInput) {
+    els.serverUrlInput.value = `${LIVEKIT_URL} | ${TOKEN_URL}`;
+    els.serverUrlInput.disabled = true;
   }
-  return {
-    audio: audioConstraints
-  };
-}
-
-function applyMuteToTrack(track) {
-  if (!track) return;
-  track.enabled = !isMuted && !listenOnly;
-}
-
-async function ensureLocalStream({ forceNew = false } = {}) {
-  if (localStream && !forceNew) return localStream;
-  try {
-    const newStream = await navigator.mediaDevices.getUserMedia(getAudioConstraints());
-    rawMicStream = newStream;
-    const [micTrack] = newStream.getAudioTracks();
-    rawMicTrack = micTrack || null;
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-    }
-    localStream = newStream;
-    await updateProcessedTrack();
-    return localStream;
-  } catch (err) {
-    if (err && err.name === 'NotAllowedError') {
-      setStatus('Mikrofon izni gerekli. Lütfen izin verip tekrar deneyin.');
-    } else {
-      setStatus(`Mikrofon erişimi başarısız: ${err.message || err}`);
-    }
-    log(`Mikrofon hatası: ${err.message || err}`);
-    return null;
+  if (els.modeSelect) {
+    els.modeSelect.value = 'sfu';
+    els.modeSelect.disabled = true;
   }
-}
+  syncAudioSettingsUi();
+  if (els.roomsList) els.roomsList.textContent = 'Oda listesi yükleniyor...';
 
-function setupMicForPeer(peerId, pc) {
-  const targetPc = pc || (peers.get(peerId) && peers.get(peerId).pc);
-  if (!targetPc) return;
-  const info = peers.get(peerId);
-  const audioTransceiver = info ? info.audioTransceiver : null;
-  const sender = audioTransceiver ? audioTransceiver.sender : targetPc.getSenders().find((s) => s.track && s.track.kind === 'audio');
-  if (!sender) {
-    // eslint-disable-next-line no-console
-    console.warn(`[mini-voice] audio sender yok: ${peerId}`);
-    return;
-  }
-  if (!currentMicTrack) {
-    // eslint-disable-next-line no-console
-    console.warn(`[mini-voice] currentMicTrack yok: ${peerId}`);
-    return;
-  }
-  sender.replaceTrack(currentMicTrack);
-}
-
-function setupMicForAllPeers() {
-  peers.forEach((_info, peerId) => {
-    setupMicForPeer(peerId);
+  els.joinBtn?.addEventListener('click', () => {
+    saveUserPrefs();
+    void joinRoom(els.roomId?.value, els.nicknameInput?.value);
   });
-}
 
-function logPeerSenders(peerId, pc) {
-  const senders = pc.getSenders();
-  // eslint-disable-next-line no-console
-  console.log(`[mini-voice] senders (${peerId})`, senders);
-  const hasAudio = senders.some((sender) => sender.track && sender.track.kind === 'audio');
-  if (!hasAudio) {
-    // eslint-disable-next-line no-console
-    console.warn(`[mini-voice] audio sender yok: ${peerId}`);
-  }
-}
+  els.createBtn?.addEventListener('click', () => {
+    if (els.roomId && !els.roomId.value.trim()) els.roomId.value = randomRoomId();
+    saveUserPrefs();
+    void joinRoom(els.roomId?.value, els.nicknameInput?.value);
+  });
 
-async function renegotiatePeer(peerId, reason) {
-  const info = peers.get(peerId);
-  if (!info || !socket) return;
-  if (!info.isNegotiationReady) return;
-  const { pc } = info;
-  if (info.isMakingOffer || pc.signalingState !== 'stable') return;
-  info.isMakingOffer = true;
-  try {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit('signal', { to: peerId, from: socket.id, data: pc.localDescription });
-    if (reason) log(`Yeniden pazarlık (${reason}): ${peerId}`);
-  } catch (err) {
-    log(`Yeniden pazarlık hatası ${peerId}: ${err.message || err}`);
-  } finally {
-    info.isMakingOffer = false;
-  }
-}
+  els.leaveBtn?.addEventListener('click', () => {
+    void leaveRoom();
+  });
 
-function configureScreenSender(sender, peerId) {
-  if (!sender || typeof sender.getParameters !== 'function') return;
-  try {
-    const params = sender.getParameters() || {};
-    const baseEncoding = (params.encodings && params.encodings[0]) || {};
-    const nextEncoding = {
-      ...baseEncoding,
-      maxBitrate: 2_500_000,
-      maxFramerate: 30,
-      scaleResolutionDownBy: 1.5
-    };
-    params.encodings = [nextEncoding];
-    sender.setParameters(params).then(() => {
-      log(`[screen] sender parameters (${peerId || 'local'}): ${JSON.stringify(nextEncoding)}`);
-    }).catch((err) => {
-      log(`[screen] sender parameter error (${peerId || 'local'}): ${err.message || err}`);
-    });
-  } catch (err) {
-    log(`[screen] sender parameter error (${peerId || 'local'}): ${err.message || err}`);
-  }
-}
+  els.muteBtn?.addEventListener('click', () => {
+    if (!localAudioTrack) return;
+    setMutedState(!isMuted, { notifyLocal: true });
+  });
 
-function attachScreenTrackToPeer(peerId) {
-  const info = peers.get(peerId);
-  if (!info || !screenTrack) return;
-  if (info.videoTransceiver) {
-    info.videoTransceiver.direction = 'sendrecv';
-    info.videoTransceiver.sender.replaceTrack(screenTrack);
-    configureScreenSender(info.videoTransceiver.sender, peerId);
-  }
-  renegotiatePeer(peerId, 'ekran paylaşımı');
-  setupMicForPeer(peerId);
-}
+  els.screenShareBtn?.addEventListener('click', () => {
+    void startScreenShare();
+  });
 
-function detachScreenTrackFromPeer(peerId) {
-  const info = peers.get(peerId);
-  if (!info) return;
-  if (info.videoTransceiver) {
-    info.videoTransceiver.sender.replaceTrack(null);
-    info.videoTransceiver.direction = 'recvonly';
-    renegotiatePeer(peerId, 'ekran paylaşımı durdurma');
-  }
-  setupMicForPeer(peerId);
-}
+  els.screenStopBtn?.addEventListener('click', () => {
+    void stopScreenShare(false);
+  });
 
-async function startScreenShare() {
-  if (!isScreenShareSupported()) {
-    setStatus(t.screenShareUnsupported);
-    return;
-  }
-  if (isScreenSharing) return;
-  try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-    screenTrack = screenStream.getVideoTracks()[0];
-    if (!screenTrack) {
-      setStatus(t.screenShareError);
+  els.refreshRoomsBtn?.addEventListener('click', () => {
+    void refreshRoomsList();
+  });
+
+  els.chatSendBtn?.addEventListener('click', () => {
+    const text = String(els.chatInput?.value || '').trim();
+    if (!text) return;
+    const now = Date.now();
+    if (chatSlowModeMs > 0 && now - lastChatSentAt < chatSlowModeMs) {
+      appendChatMessage({ system: true, text: `Slow mode aktif. ${chatSlowModeMs}ms bekle.`, ts: now });
       return;
     }
-    try {
-      const settings = screenTrack.getSettings ? screenTrack.getSettings() : {};
-      log(`[screen] track settings: ${JSON.stringify(settings)}`);
-    } catch (err) {
-      log(`[screen] track settings error: ${err.message || err}`);
-    }
-    screenTrack.onended = () => stopScreenShare('ended');
-    isScreenSharing = true;
-    updateScreenShareButton();
-    updateStatusBar();
-    setScreenVideoStream(screenStream, socket ? socket.id : 'local');
-    setScreenStatusText(t.screenShareStarted);
-    setStatus(t.screenShareStarted);
-    showToast('Ekran paylaşımı başladı', 'success');
-    peers.forEach((_info, peerId) => attachScreenTrackToPeer(peerId));
-  } catch (err) {
-    if (err && err.name === 'NotAllowedError') {
-      setStatus('Ekran paylaşımı reddedildi. Lütfen izin verip tekrar deneyin.');
-    } else {
-      setStatus(t.screenShareError);
-    }
-    log(`Ekran paylaşımı hatası: ${err.message || err}`);
-  }
-}
-
-function stopScreenShare(reason) {
-  if (!screenStream) return;
-  screenStream.getTracks().forEach((track) => track.stop());
-  screenStream = null;
-  screenTrack = null;
-  isScreenSharing = false;
-  updateScreenShareButton();
-  updateStatusBar();
-  if (activeScreenPeerId === (socket && socket.id)) {
-    clearScreenVideo(t.screenShareStopped);
-  }
-  peers.forEach((_info, peerId) => detachScreenTrackFromPeer(peerId));
-  if (reason === 'ended') {
-    setStatus(t.screenShareEnded);
-    setScreenStatusText(t.screenShareEnded);
-  } else {
-    setStatus(t.screenShareStopped);
-    setScreenStatusText(t.screenShareStopped);
-  }
-}
-
-function createAudioElement(peerId) {
-  const audio = document.createElement('audio');
-  audio.autoplay = true;
-  audio.playsInline = true;
-  audio.dataset.peerId = peerId;
-  audioContainer.appendChild(audio);
-  if (deviceSettings.outputId && audio.setSinkId) {
-    audio.setSinkId(deviceSettings.outputId).catch(() => {});
-  }
-  return audio;
-}
-
-function removeAudioElement(peerId) {
-  const audio = audioContainer.querySelector(`audio[data-peer-id="${peerId}"]`);
-  if (audio) audio.remove();
-}
-
-function cleanupPeer(peerId) {
-  const info = peers.get(peerId);
-  if (!info) return;
-  try {
-    info.pc.onicecandidate = null;
-    info.pc.ontrack = null;
-    info.pc.close();
-  } catch (_) {
-    // ignore cleanup errors
-  }
-  removeAudioElement(peerId);
-  cleanupSpeakingAnalyser(peerId);
-  peers.delete(peerId);
-  if (activeScreenPeerId === peerId) {
-    clearScreenVideo(t.screenShareEnded);
-  }
-}
-
-function cleanupAllPeers() {
-  Array.from(peers.keys()).forEach(cleanupPeer);
-}
-
-function getSettingsKey(nickname) {
-  return `voice-settings:${nickname}`;
-}
-
-function loadRemoteSettings(nickname) {
-  if (!nickname) return { volume: 1, muted: false };
-  const raw = localStorage.getItem(getSettingsKey(nickname));
-  if (!raw) return { volume: 1, muted: false };
-  try {
-    const parsed = JSON.parse(raw);
-    const volume = typeof parsed.volume === 'number' ? parsed.volume : 1;
-    const muted = Boolean(parsed.muted);
-    return { volume: Math.max(0, Math.min(2, volume)), muted };
-  } catch (_) {
-    return { volume: 1, muted: false };
-  }
-}
-
-function saveRemoteSettings(nickname, settings) {
-  if (!nickname) return;
-  localStorage.setItem(getSettingsKey(nickname), JSON.stringify(settings));
-}
-
-function applyRemoteAudioSettings(peerId) {
-  const info = peers.get(peerId);
-  if (!info) return;
-  const nickname = participants.get(peerId) || peerId;
-  const settings = loadRemoteSettings(nickname);
-  info.audioEl.volume = settings.volume;
-  info.audioEl.muted = isSpeakerMuted || settings.muted;
-}
-
-function renderAudioControls() {
-  if (!els.audioList) return;
-  els.audioList.innerHTML = '';
-  const ids = Array.from(peers.keys());
-  if (ids.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'mutedText';
-    empty.textContent = t.audioEmpty;
-    els.audioList.appendChild(empty);
-    return;
-  }
-  ids.forEach((peerId) => {
-    const nickname = participants.get(peerId) || peerId;
-    const settings = loadRemoteSettings(nickname);
-    const card = document.createElement('div');
-    card.className = 'audioCard userCard';
-    card.dataset.peerId = peerId;
-    const speaking = speakerAnalysers.get(peerId);
-    if (speaking && speaking.speaking) {
-      card.classList.add('speaking');
-    }
-    const header = document.createElement('div');
-    header.className = 'audioHeader';
-    const nameEl = document.createElement('div');
-    nameEl.textContent = nickname;
-    const badge = document.createElement('div');
-    badge.className = 'mutedBadge';
-    badge.textContent = settings.muted ? 'Sessiz' : 'Açık';
-    header.appendChild(nameEl);
-    header.appendChild(badge);
-
-    const controls = document.createElement('div');
-    controls.className = 'audioControls';
-    const sliderRow = document.createElement('div');
-    sliderRow.className = 'sliderRow';
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.min = '0';
-    slider.max = '200';
-    slider.value = String(Math.round(settings.volume * 100));
-    const sliderValue = document.createElement('div');
-    sliderValue.textContent = `${slider.value}%`;
-    sliderRow.appendChild(slider);
-    sliderRow.appendChild(sliderValue);
-
-    const muteBtn = document.createElement('button');
-    muteBtn.className = 'btn';
-    muteBtn.textContent = settings.muted ? 'Sesi Aç' : 'Sessize Al';
-
-    slider.addEventListener('input', () => {
-      const volume = Math.max(0, Math.min(2, Number(slider.value) / 100));
-      sliderValue.textContent = `${slider.value}%`;
-      const next = { ...settings, volume };
-      saveRemoteSettings(nickname, next);
-      settings.volume = volume;
-      applyRemoteAudioSettings(peerId);
-    });
-
-    muteBtn.addEventListener('click', () => {
-      settings.muted = !settings.muted;
-      muteBtn.textContent = settings.muted ? 'Sesi Aç' : 'Sessize Al';
-      badge.textContent = settings.muted ? 'Sessiz' : 'Açık';
-      saveRemoteSettings(nickname, settings);
-      applyRemoteAudioSettings(peerId);
-    });
-
-    controls.appendChild(sliderRow);
-    controls.appendChild(muteBtn);
-    card.appendChild(header);
-    card.appendChild(controls);
-    els.audioList.appendChild(card);
-
-    applyRemoteAudioSettings(peerId);
-  });
-}
-
-function appendChatMessage({ fromId, nickname, text, ts } = {}) {
-  if (!els.chatMessages || !text) return;
-  const message = document.createElement('div');
-  message.className = 'chatMessage';
-  const time = new Date(ts || Date.now()).toLocaleTimeString();
-  const fromName = nickname || fromId || 'Bilinmeyen';
-  const trimmed = String(text);
-  if (trimmed.startsWith('/me ')) {
-    message.classList.add('me');
-    const action = document.createElement('div');
-    action.textContent = `* ${fromName} ${trimmed.slice(4).trim()}`;
-    message.appendChild(action);
-  } else {
-    const meta = document.createElement('div');
-    meta.className = 'meta';
-    meta.textContent = `${fromName} · ${time}`;
-    const body = document.createElement('div');
-    body.textContent = trimmed;
-    message.appendChild(meta);
-    message.appendChild(body);
-  }
-  els.chatMessages.appendChild(message);
-  els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
-}
-
-function clearChat() {
-  if (els.chatMessages) els.chatMessages.innerHTML = '';
-}
-
-function ensureSocket() {
-  const desiredUrl = getSignalingUrl();
-  if (socket && socket.connected && currentSocketUrl === desiredUrl) return socket;
-  if (socket && currentSocketUrl !== desiredUrl) {
-    socket.disconnect();
-    socket = null;
-  }
-
-  if (typeof io !== 'function') {
-    setStatus([
-      'Socket.io client yüklenemedi.',
-      'İnternet bağlantını kontrol et veya CDN yerine local kopya kullan.'
-    ]);
-    return null;
-  }
-
-  socket = io(desiredUrl, {
-    transports: ['websocket', 'polling']
-  });
-  currentSocketUrl = desiredUrl;
-
-  socket.on('connect', () => {
-    updateServerUrlDisplay();
-    log(`Socket bağlandı: ${socket.id}`);
-    setStatus('Bağlandı.');
-    updateStatusBar();
-    if (socket.io && socket.io.engine && !pingListenerAttached) {
-      pingListenerAttached = true;
-      socket.io.engine.on('pong', () => {
-        updateStatusBar();
-      });
-    }
-    socket.emit('list-rooms');
-    if (pendingJoin) {
-      socket.emit('join-room', pendingJoin);
-    }
+    lastChatSentAt = now;
+    if (els.chatInput) els.chatInput.value = '';
+    const handled = handleCommandInput(text);
+    if (!handled) sendChat(text);
   });
 
-  socket.on('disconnect', () => {
-    const wasInRoom = Boolean(currentRoomId);
-    updateStatusBar();
-    if (isScreenSharing) stopScreenShare('disconnect');
-    cleanupAllPeers();
-    participants.clear();
-    renderParticipants();
-    renderAudioControls();
-    currentRoomId = null;
-    stopStatsLoop();
-    currentHostId = null;
-    setUiState({ inRoom: false });
-    setView('lobby');
-    isMuted = false;
-    updateMuteButton();
-    if (wasInRoom && !manualLeave) {
-      setStatus('Bağlantı koptu. Yeniden bağlanınca odaya tekrar katılacağım.');
-    } else {
-      setStatus('Bağlantı koptu.');
-    }
-    log('Bağlantı kesildi.');
-  });
-
-  socket.on('connect_error', (err) => {
-    setStatus(`Bağlantı hatası: ${err.message || err}`);
-    updateStatusBar();
-  });
-
-  if (socket.io) {
-    socket.io.on('reconnect_attempt', (attempt) => {
-      setStatus(`Yeniden bağlanılıyor... (deneme ${attempt})`);
-    });
-    socket.io.on('reconnect_failed', () => {
-      setStatus('Yeniden bağlanma başarısız.');
-    });
-  }
-
-  socket.on('rooms-list', (rooms = []) => {
-    renderRoomsList(rooms);
-  });
-
-  socket.on('rooms-updated', (rooms = []) => {
-    renderRoomsList(rooms);
-  });
-
-  socket.on('users-in-room', ({ roomId, users, hostId } = {}) => {
-    if (!roomId) {
-      setStatus('Oda ID gerekli.');
-      return;
-    }
-    currentRoomId = roomId;
-    localStorage.setItem(LAST_ROOM_KEY, roomId);
-    currentHostId = hostId || null;
-    manualLeave = false;
-    setUiState({ inRoom: true });
-    setView('room');
-    participants.clear();
-    if (socket && socket.id) {
-      participants.set(socket.id, currentNickname || 'Ben');
-    }
-    const peersInRoom = Array.isArray(users) ? users : [];
-    peersInRoom.forEach((user) => {
-      if (user && user.id) participants.set(user.id, user.nickname || user.id);
-    });
-    renderParticipants();
-    renderAudioControls();
-    updateModerationTargets();
-    updateModerationUI();
-    clearChat();
-    setStatus([`Odaya katılındı: ${currentRoomId}`, `Katılımcı: ${participants.size}`]);
-    log(`Odaya katılındı: ${currentRoomId}`);
-    log(`Kullanıcı listesi alındı: ${peersInRoom.length}`);
-
-    peersInRoom.forEach((peer) => {
-      createPeerConnection(peer.id, true);
-    });
-    sendPresenceUpdate();
-    socket.emit('list-rooms');
-    startStatsLoop();
-  });
-
-  socket.on('user-joined', ({ id, nickname } = {}) => {
-    if (!id) return;
-    participants.set(id, nickname || id);
-    renderParticipants();
-    updateModerationTargets();
-    createPeerConnection(id, false);
-    setStatus([`Yeni katılımcı: ${nickname || id}`, `Oda: ${currentRoomId || '-'}`]);
-    log(`Yeni katılımcı: ${nickname || id}`);
-    showToast(`${nickname || id} odaya katıldı`, 'success');
-    if (!socket || id !== socket.id) playUiBeep({ freq: 740, durationMs: 80 });
-  });
-
-  socket.on('user-left', ({ id } = {}) => {
-    if (!id) return;
-    cleanupPeer(id);
-    participants.delete(id);
-    participantPresence.delete(id);
-    renderParticipants();
-    renderAudioControls();
-    updateModerationTargets();
-    setStatus([`Kullanıcı ayrıldı: ${id}`, `Oda: ${currentRoomId || '-'}`]);
-    log(`Kullanıcı ayrıldı: ${id}`);
-    showToast(`${id} odadan çıktı`, 'warn');
-    playUiBeep({ freq: 440, durationMs: 90 });
-  });
-
-  socket.on('host-changed', ({ hostId } = {}) => {
-    currentHostId = hostId || null;
-    updateModerationUI();
-  });
-
-  socket.on('join-denied', ({ reason } = {}) => {
-    setStatus(reason || 'Odaya katılma reddedildi.');
-    showToast(reason || 'Odaya katılma reddedildi.', 'warn');
-    leaveRoom();
-  });
-
-  socket.on('kicked', ({ reason } = {}) => {
-    showToast(reason || 'Odadan çıkarıldın.', 'warn');
-    leaveRoom();
-  });
-
-  socket.on('banned', ({ reason } = {}) => {
-    showToast(reason || 'Odadan yasaklandın.', 'warn');
-    leaveRoom();
-  });
-
-  socket.on('force-mute', ({ reason } = {}) => {
-    isMuted = true;
-    applyMuteToTrack(currentMicTrack);
-    updateMuteButton();
-    updateStatusBar();
-    showToast(reason || 'Mikrofon sessize alındı.', 'warn');
-    sendPresenceUpdate();
-  });
-
-  socket.on('force-unmute', ({ reason } = {}) => {
-    isMuted = false;
-    applyMuteToTrack(currentMicTrack);
-    updateMuteButton();
-    updateStatusBar();
-    showToast(reason || 'Mikrofon açıldı.', 'success');
-    sendPresenceUpdate();
-  });
-
-  socket.on('slowmode-warn', ({ ms } = {}) => {
-    showToast(`Slow mode aktif (${ms}ms).`, 'warn');
-  });
-
-  socket.on('slowmode-updated', ({ ms } = {}) => {
-    showToast(`Slow mode ${ms ? `${ms}ms` : 'kapalı'}.`, 'success');
-  });
-
-  socket.on('chat-message', (payload) => {
-    if (tryHandlePresenceMessage(payload)) return;
-    appendChatMessage(payload);
-  });
-
-  socket.on('nickname-updated', ({ id, nickname } = {}) => {
-    if (!id || !nickname) return;
-    participants.set(id, nickname);
-    if (socket && id === socket.id) {
-      currentNickname = nickname;
-      if (els.nicknameInput) els.nicknameInput.value = nickname;
-      localStorage.setItem('voice-nickname', nickname);
-    }
-    renderParticipants();
-    renderAudioControls();
-  });
-
-  socket.on('signal', async ({ from, data } = {}) => {
-    if (!from || !data) return;
-
-    if (!peers.has(from)) {
-      createPeerConnection(from, false);
-    }
-
-    const info = peers.get(from);
-    if (!info) return;
-
-    const pc = info.pc;
-    try {
-      if (data.type === 'offer') {
-        log(`Teklif alındı: ${from}`);
-        await pc.setRemoteDescription(data);
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit('signal', { to: from, from: socket.id, data: pc.localDescription });
-        info.isNegotiationReady = true;
-        log(`Yanıt gönderildi: ${from}`);
-      } else if (data.type === 'answer') {
-        log(`Yanıt alındı: ${from}`);
-        await pc.setRemoteDescription(data);
-        info.isNegotiationReady = true;
-        if (info.pendingCandidates.length > 0) {
-          for (const candidate of info.pendingCandidates) {
-            await pc.addIceCandidate(candidate);
-          }
-          info.pendingCandidates = [];
-        }
-      } else if (data.candidate) {
-        log(`ICE alındı: ${from}`);
-        if (pc.remoteDescription) {
-          await pc.addIceCandidate(data);
-        } else {
-          info.pendingCandidates.push(data);
-        }
-      }
-    } catch (err) {
-      setStatus([`WebRTC hatası: ${err.message || err}`, `Peer: ${from}`]);
-    }
-  });
-
-  return socket;
-}
-
-function createPeerConnection(peerId, shouldCreateOffer) {
-  if (peers.has(peerId)) return peers.get(peerId);
-
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  const info = {
-    pc,
-    audioEl: createAudioElement(peerId),
-    pendingCandidates: [],
-    isMakingOffer: false,
-    isNegotiationReady: false,
-    audioTransceiver: null,
-    videoTransceiver: null
-  };
-
-  info.audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' });
-  info.videoTransceiver = pc.addTransceiver('video', { direction: 'recvonly' });
-  if (currentMicTrack) {
-    info.audioTransceiver.sender.replaceTrack(currentMicTrack);
-  }
-  if (screenTrack && screenStream) {
-    info.videoTransceiver.direction = 'sendrecv';
-    info.videoTransceiver.sender.replaceTrack(screenTrack);
-    configureScreenSender(info.videoTransceiver.sender, peerId);
-  }
-
-  pc.onicecandidate = (event) => {
-    if (!event.candidate) return;
-    if (!socket) return;
-    socket.emit('signal', { to: peerId, from: socket.id, data: event.candidate });
-    log(`ICE gönderildi: ${peerId}`);
-  };
-
-  pc.ontrack = (event) => {
-    const [stream] = event.streams;
-    if (event.track.kind === 'video') {
-      const videoStream = stream || new MediaStream([event.track]);
-      setScreenVideoStream(videoStream, peerId);
-      setScreenStatusText(`Ekran paylaşımı: ${participants.get(peerId) || peerId}`);
-      showToast(`${participants.get(peerId) || peerId} ekran paylaşımı başlattı`, 'success');
-      event.track.onended = () => {
-        if (activeScreenPeerId === peerId) {
-          clearScreenVideo(t.screenShareEnded);
-          setStatus(t.screenShareEnded);
-        }
-      };
-      return;
-    }
-    if (stream) {
-      info.audioEl.srcObject = stream;
-    } else {
-      const fallback = new MediaStream([event.track]);
-      info.audioEl.srcObject = fallback;
-    }
-    ensureSpeakingAnalyser(peerId);
-    applyRemoteAudioSettings(peerId);
-  };
-
-  pc.onconnectionstatechange = () => {
-    log(`PC durumu ${peerId}: ${pc.connectionState}`);
-    if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
-      cleanupPeer(peerId);
-      participants.delete(peerId);
-      renderParticipants();
-      renderAudioControls();
-    }
-  };
-
-  pc.oniceconnectionstatechange = () => {
-    log(`ICE durumu ${peerId}: ${pc.iceConnectionState}`);
-  };
-
-  pc.onnegotiationneeded = () => {
-    if (!info.isNegotiationReady) return;
-    renegotiatePeer(peerId, 'negotiationneeded');
-  };
-
-  peers.set(peerId, info);
-  renderAudioControls();
-  setupMicForPeer(peerId, pc);
-  logPeerSenders(peerId, pc);
-
-  if (shouldCreateOffer) {
-    info.isMakingOffer = true;
-    pc.createOffer()
-      .then((offer) => pc.setLocalDescription(offer))
-      .then(() => {
-        if (!socket) return;
-        socket.emit('signal', { to: peerId, from: socket.id, data: pc.localDescription });
-        log(`Teklif gönderildi: ${peerId}`);
-      })
-      .catch((err) => {
-        setStatus([`Teklif hatası: ${err.message || err}`, `Peer: ${peerId}`]);
-        log(`Teklif hatası ${peerId}: ${err.message || err}`);
-      })
-      .finally(() => {
-        info.isMakingOffer = false;
-      });
-  }
-
-  return info;
-}
-
-async function startJoinFlow(roomId) {
-  const clean = String(roomId || '').trim();
-  if (!clean) {
-    setStatus('Oda ID gerekli.');
-    return;
-  }
-  if (els.nicknameInput) {
-    updateNickname(els.nicknameInput.value);
-  }
-
-  await ensureAudioContext();
-  const stream = await ensureLocalStream();
-  if (!stream) return;
-
-  currentRoomId = clean;
-  manualLeave = false;
-  pendingJoin = { roomId: clean, nickname: currentNickname };
-  setUiState({ inRoom: true });
-  setStatus([`Bağlanılıyor...`, `Oda: ${currentRoomId}`]);
-
-  const s = ensureSocket();
-  if (!s) {
-    pendingJoin = null;
-    currentRoomId = null;
-    setUiState({ inRoom: false });
-    setView('lobby');
-    setStatus('Bağlantı kurulamadı. Socket istemcisi yüklenemedi.');
-    return;
-  }
-  if (s.connected) {
-    s.emit('join-room', pendingJoin);
-  }
-}
-
-function leaveRoom() {
-  manualLeave = true;
-  pendingJoin = null;
-  if (isScreenSharing) stopScreenShare('manual');
-  cleanupAllPeers();
-  stopStatsLoop();
-
-  if (localStream) {
-    localStream.getTracks().forEach((track) => track.stop());
-    localStream = null;
-  }
-  rawMicStream = null;
-  rawMicTrack = null;
-  processedStream = null;
-  processedTrack = null;
-  currentMicTrack = null;
-  setVuLevel(0, null);
-
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-  }
-
-  currentRoomId = null;
-  isMuted = false;
-  participants.clear();
-  renderParticipants();
-  renderAudioControls();
-  clearChat();
-  setUiState({ inRoom: false });
-  setView('lobby');
-  updateMuteButton();
-  updateStatusBar();
-  setStatus('Odadan çıkıldı.');
-  ensureSocket();
-}
-
-function updateNickname(nextName) {
-  const clean = String(nextName || '').trim();
-  if (!clean) return;
-  currentNickname = clean.slice(0, 32);
-  if (els.nicknameInput) els.nicknameInput.value = currentNickname;
-  localStorage.setItem('voice-nickname', currentNickname);
-  if (socket && socket.connected && currentRoomId) {
-    socket.emit('set-nickname', { roomId: currentRoomId, nickname: currentNickname });
-  }
-}
-
-function handleChatSubmit() {
-  if (!els.chatInput) return;
-  const text = els.chatInput.value.trim();
-  if (!text) return;
-  els.chatInput.value = '';
-
-  if (text.startsWith('/nick ')) {
-    const next = text.replace('/nick', '').trim();
-    if (next) {
-      updateNickname(next);
-      appendChatMessage({
-        nickname: currentNickname,
-        text: `/me takma adını "${next}" olarak güncelledi.`
-      });
-    }
-    return;
-  }
-
-  if (!socket || !currentRoomId) return;
-  socket.emit('chat-message', { roomId: currentRoomId, text });
-}
-
-els.joinBtn.addEventListener('click', () => {
-  startJoinFlow(els.roomId.value);
-});
-
-els.createBtn.addEventListener('click', () => {
-  if (!els.roomId.value.trim()) els.roomId.value = randomRoomId();
-  startJoinFlow(els.roomId.value);
-});
-
-els.leaveBtn.addEventListener('click', () => {
-  leaveRoom();
-});
-
-els.muteBtn.addEventListener('click', () => {
-  if (!currentMicTrack) return;
-  isMuted = !isMuted;
-  applyMuteToTrack(currentMicTrack);
-  setupMicForAllPeers();
-  updateMuteButton();
-  setVuLevel(0, -60);
-  updateStatusBar();
-  setStatus([`Oda: ${currentRoomId || '-'}`, `Mikrofon: ${isMuted ? 'Sessiz' : 'Açık'}`]);
-  log(`Mikrofon: ${isMuted ? 'Sessiz' : 'Açık'}`);
-  sendPresenceUpdate();
-});
-
-if (els.noiseToggle) {
-  els.noiseToggle.addEventListener('change', async (event) => {
-    noiseEnabled = Boolean(event.target.checked);
-    if (currentRoomId) {
-      await ensureLocalStream({ forceNew: true });
-      setStatus(noiseEnabled ? t.advancedAudioOn : t.advancedAudioOff);
-      log(`Gürültü azaltma ${noiseEnabled ? 'açıldı' : 'kapandı'}.`);
-    }
-  });
-}
-
-if (els.agcToggle) {
-  els.agcToggle.addEventListener('change', async (event) => {
-    agcEnabled = Boolean(event.target.checked);
-    if (currentRoomId) {
-      await ensureLocalStream({ forceNew: true });
-      log(`AGC ${agcEnabled ? 'açıldı' : 'kapandı'}.`);
-    }
-  });
-}
-
-if (els.listenOnlyToggle) {
-  els.listenOnlyToggle.addEventListener('change', () => {
-    listenOnly = Boolean(els.listenOnlyToggle.checked);
-    applyMuteToTrack(currentMicTrack);
-    setupMicForAllPeers();
-    updateStatusBar();
-    showToast(listenOnly ? 'Listen-only aktif.' : 'Listen-only kapalı.', 'success');
-    sendPresenceUpdate();
-  });
-}
-
-if (els.deafToggle) {
-  els.deafToggle.addEventListener('change', () => {
-    isDeaf = Boolean(els.deafToggle.checked);
-    isSpeakerMuted = isDeaf;
-    updateSpeakerButton();
-    Array.from(peers.keys()).forEach(applyRemoteAudioSettings);
-    updateStatusBar();
-    showToast(isDeaf ? 'Deaf aktif.' : 'Deaf kapalı.', 'success');
-    sendPresenceUpdate();
-  });
-}
-
-if (els.micSelect) {
-  els.micSelect.addEventListener('change', async () => {
-    deviceSettings.micId = els.micSelect.value;
-    saveDeviceSettings();
-    if (currentRoomId) {
-      await ensureLocalStream({ forceNew: true });
-    }
-  });
-}
-
-if (els.outputSelect) {
-  els.outputSelect.addEventListener('change', async () => {
-    deviceSettings.outputId = els.outputSelect.value;
-    saveDeviceSettings();
-    await applyOutputDevice(deviceSettings.outputId);
-  });
-}
-
-  if (els.micGain) {
-    els.micGain.addEventListener('input', (event) => {
-      audioSettings.micGain = Math.max(0, Math.min(2, Number(event.target.value) / 100));
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
-
-  if (els.highPassFreq) {
-    els.highPassFreq.addEventListener('input', (event) => {
-      audioSettings.highPass = Number(event.target.value);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
-
-  if (els.compressorToggle) {
-    els.compressorToggle.addEventListener('change', (event) => {
-      audioSettings.compressor = Boolean(event.target.checked);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
-
-  if (els.gateThreshold) {
-    els.gateThreshold.addEventListener('input', (event) => {
-      audioSettings.gateThreshold = Number(event.target.value);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
-
-  if (els.gateAttack) {
-    els.gateAttack.addEventListener('input', (event) => {
-      audioSettings.gateAttack = Number(event.target.value);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
-
-  if (els.gateRelease) {
-    els.gateRelease.addEventListener('input', (event) => {
-      audioSettings.gateRelease = Number(event.target.value);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
-
-  if (els.gateFloor) {
-    els.gateFloor.addEventListener('input', (event) => {
-      audioSettings.gateFloor = Number(event.target.value);
-      saveAudioSettings();
-      updateAudioSettingsUI();
-      updateAudioParams();
-    });
-  }
-
-if (els.speakerBtn) {
-  els.speakerBtn.addEventListener('click', () => {
-    isSpeakerMuted = !isSpeakerMuted;
-    updateSpeakerButton();
-    Array.from(peers.keys()).forEach(applyRemoteAudioSettings);
-    sendPresenceUpdate();
-  });
-}
-
-if (els.screenShareBtn) {
-  els.screenShareBtn.addEventListener('click', () => {
-    if (!isScreenSharing) startScreenShare();
-  });
-}
-
-if (els.screenStopBtn) {
-  els.screenStopBtn.addEventListener('click', () => {
-    if (isScreenSharing) stopScreenShare('manual');
-  });
-}
-
-if (els.micTestBtn) {
-  els.micTestBtn.addEventListener('click', async () => {
-    await ensureAudioContext();
-    openMicTestModal();
-  });
-}
-
-if (els.micTestClose) {
-  els.micTestClose.addEventListener('click', () => {
-    closeMicTestModal();
-  });
-}
-
-if (els.micTestStart) {
-  els.micTestStart.addEventListener('click', async () => {
-    await ensureAudioContext();
-    startMicTest();
-  });
-}
-
-if (els.micTestStop) {
-  els.micTestStop.addEventListener('click', () => {
-    stopMicTest();
-  });
-}
-
-if (els.echoTestBtn) {
-  els.echoTestBtn.addEventListener('click', async () => {
-    await ensureAudioContext();
-    runEchoTest();
-  });
-}
-
-if (els.screenFullscreenBtn) {
-  els.screenFullscreenBtn.addEventListener('click', () => {
-    log('Tam Ekran butonu tıklandı (modal).');
-    if (isScreenModalOpen) {
-      closeScreenModal();
-    } else {
-      openScreenModal();
-    }
-  });
-}
-
-if (els.screenModalClose) {
-  els.screenModalClose.addEventListener('click', () => {
-    closeScreenModal();
-  });
-}
-
-if (els.screenModal) {
-  els.screenModal.addEventListener('click', (event) => {
-    if (event.target === els.screenModal) {
-      closeScreenModal();
-    }
-  });
-}
-
-if (els.settingsBtn) {
-  els.settingsBtn.addEventListener('click', () => {
-    if (els.settingsDrawer) els.settingsDrawer.classList.remove('hidden');
-  });
-}
-
-if (els.settingsClose) {
-  els.settingsClose.addEventListener('click', () => {
-    if (els.settingsDrawer) els.settingsDrawer.classList.add('hidden');
-  });
-}
-
-document.addEventListener('fullscreenchange', handleDomFullscreenChange);
-document.addEventListener('webkitfullscreenchange', handleDomFullscreenChange);
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && isScreenModalOpen) {
-    closeScreenModal();
-  }
-});
-
-if (els.refreshRoomsBtn) {
-  els.refreshRoomsBtn.addEventListener('click', () => {
-    const s = ensureSocket();
-    if (s && s.connected) s.emit('list-rooms');
-  });
-}
-
-function sendModeration(action) {
-  if (!socket || !currentRoomId || !els.moderationTarget) return;
-  const targetId = els.moderationTarget.value;
-  if (!targetId) return;
-  socket.emit('moderation-action', { roomId: currentRoomId, action, targetId });
-}
-
-if (els.muteOtherBtn) {
-  els.muteOtherBtn.addEventListener('click', () => sendModeration('mute'));
-}
-if (els.unmuteOtherBtn) {
-  els.unmuteOtherBtn.addEventListener('click', () => sendModeration('unmute'));
-}
-if (els.kickBtn) {
-  els.kickBtn.addEventListener('click', () => sendModeration('kick'));
-}
-if (els.banBtn) {
-  els.banBtn.addEventListener('click', () => sendModeration('ban'));
-}
-if (els.slowModeBtn) {
-  els.slowModeBtn.addEventListener('click', () => {
-    if (!socket || !currentRoomId || !els.slowModeSelect) return;
-    const slowModeMs = Number(els.slowModeSelect.value);
-    socket.emit('moderation-action', { roomId: currentRoomId, action: 'slowmode', slowModeMs });
-  });
-}
-
-if (els.chatSendBtn) {
-  els.chatSendBtn.addEventListener('click', handleChatSubmit);
-}
-
-if (els.logCopyBtn) {
-  els.logCopyBtn.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(logLines.join('\n'));
-      showToast('Log kopyalandı', 'success');
-    } catch (err) {
-      showToast('Log kopyalanamadı', 'warn');
-    }
-  });
-}
-
-if (els.logClearBtn) {
-  els.logClearBtn.addEventListener('click', () => {
-    logLines.length = 0;
-    if (els.log) els.log.textContent = '';
-    showToast('Log temizlendi', 'success');
-  });
-}
-
-if (els.moderationToggle) {
-  els.moderationToggle.addEventListener('click', () => {
-    if (els.moderationPanel) {
-      els.moderationPanel.classList.toggle('open');
-    }
-  });
-}
-
-if (els.chatInput) {
-  els.chatInput.addEventListener('keydown', (event) => {
+  els.chatInput?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      handleChatSubmit();
+      els.chatSendBtn?.click();
     }
   });
-}
 
-initWindowControls();
-setText();
-loadAudioSettings();
-loadDeviceSettings();
-updateAudioSettingsUI();
-if (els.noiseToggle) els.noiseToggle.checked = noiseEnabled;
-if (els.agcToggle) els.agcToggle.checked = agcEnabled;
-setUiState({ inRoom: false });
-setView('lobby');
-setStatus('Hazır. Oda ID girip katılabilirsin.');
-log('Hazır.');
-updateServerUrlDisplay();
-updateMuteButton();
-updateSpeakerButton();
-updateScreenShareButton();
-updateFullscreenButton();
-updateStatusBar();
-setScreenStatusText(t.screenShareEmpty);
-updateDeviceLists();
-if (deviceSettings.outputId) {
-  applyOutputDevice(deviceSettings.outputId);
-}
-const lastRoom = localStorage.getItem(LAST_ROOM_KEY);
-if (lastRoom && els.roomId) {
-  els.roomId.value = lastRoom;
-  currentRoomId = lastRoom;
-}
-initTabs();
-if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
-  navigator.mediaDevices.addEventListener('devicechange', () => {
-    updateDeviceLists();
+  els.micSelect?.addEventListener('change', async () => {
+    deviceSettings.micId = els.micSelect.value || null;
+    saveUserPrefs();
+    if (room) await createAndPublishMicTrack();
   });
-}
 
-const storedNickname = localStorage.getItem('voice-nickname');
-if (els.nicknameInput) {
-  if (storedNickname) {
-    currentNickname = storedNickname;
-  } else {
-    currentNickname = `Kullanıcı${Math.floor(Math.random() * 9000 + 1000)}`;
+  els.outputSelect?.addEventListener('change', () => {
+    deviceSettings.outputId = els.outputSelect.value || null;
+    saveUserPrefs();
+    trackElements.forEach((value) => {
+      if (value.kind !== 'audio') return;
+      const audioEl = value.element;
+      if (typeof audioEl.setSinkId === 'function' && deviceSettings.outputId) {
+        audioEl.setSinkId(deviceSettings.outputId).catch(() => {});
+      }
+    });
+  });
+
+  els.listenOnlyToggle?.addEventListener('change', () => {
+    setMutedState(Boolean(els.listenOnlyToggle.checked), { syncListenOnly: false });
+  });
+
+  els.deafToggle?.addEventListener('change', () => {
+    setDeafState(Boolean(els.deafToggle.checked), { syncToggle: false });
+  });
+
+  els.speakerBtn?.addEventListener('click', () => {
+    setDeafState(!isDeaf);
+  });
+
+  els.noiseToggle?.addEventListener('change', async () => {
+    noiseReductionEnabled = Boolean(els.noiseToggle.checked);
+    updateStatusBar();
+    setStatus(noiseReductionEnabled ? 'Gürültü azaltma açıldı.' : 'Gürültü azaltma kapatıldı.');
+    saveUserPrefs();
+    if (room) {
+      scheduleMicRepublish(0);
+    }
+  });
+
+  const bindAudioSettingRange = (el, updater) => {
+    if (!el) return;
+    const onChange = () => {
+      updater(Number(el.value));
+      syncAudioSettingsUi();
+      saveUserPrefs();
+      const appliedLive = applyLiveMicProcessingSettings();
+      if (room && !appliedLive) scheduleMicRepublish();
+    };
+    el.addEventListener('input', onChange);
+    el.addEventListener('change', onChange);
+  };
+
+  bindAudioSettingRange(els.micGain, (value) => {
+    audioSettings.micGain = Math.max(0, Math.min(200, Number.isFinite(value) ? value : 100));
+  });
+  bindAudioSettingRange(els.highPassFreq, (value) => {
+    audioSettings.highPassHz = Math.max(60, Math.min(200, Number.isFinite(value) ? value : 90));
+  });
+  bindAudioSettingRange(els.gateThreshold, (value) => {
+    audioSettings.gateThresholdDb = Math.max(-60, Math.min(-20, Number.isFinite(value) ? value : -40));
+  });
+  bindAudioSettingRange(els.gateAttack, (value) => {
+    audioSettings.gateAttackMs = Math.max(1, Math.min(50, Number.isFinite(value) ? value : 5));
+  });
+  bindAudioSettingRange(els.gateRelease, (value) => {
+    audioSettings.gateReleaseMs = Math.max(20, Math.min(400, Number.isFinite(value) ? value : 150));
+  });
+  bindAudioSettingRange(els.gateFloor, (value) => {
+    audioSettings.gateFloorDb = Math.max(-80, Math.min(-30, Number.isFinite(value) ? value : -60));
+  });
+
+  const bindAudioSettingToggle = (el, updater, republishDelay = 180) => {
+    if (!el) return;
+    el.addEventListener('change', () => {
+      updater(Boolean(el.checked));
+      syncAudioSettingsUi();
+      saveUserPrefs();
+      if (room) scheduleMicRepublish(republishDelay);
+    });
+  };
+
+  bindAudioSettingToggle(els.agcToggle, (checked) => {
+    audioSettings.agcEnabled = checked;
+  }, 0);
+  bindAudioSettingToggle(els.compressorToggle, (checked) => {
+    audioSettings.compressorEnabled = checked;
+  });
+
+  els.screenFullscreenBtn?.addEventListener('click', async () => {
+    if (isScreenModalOpen) {
+      closeScreenModal();
+      return;
+    }
+    openScreenModal();
+  });
+
+  els.screenModalClose?.addEventListener('click', () => {
+    closeScreenModal();
+  });
+  els.screenModal?.addEventListener('click', (event) => {
+    if (event.target === els.screenModal) closeScreenModal();
+  });
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && isScreenModalOpen) {
+      closeScreenModal();
+    }
+  });
+
+  els.moderationToggle?.addEventListener('click', () => {
+    if (!els.moderationPanel) return;
+    els.moderationPanel.classList.toggle('open');
+  });
+
+  els.logCopyBtn?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText((els.log && els.log.textContent) || '');
+      setStatus('Log panoya kopyalandı.');
+    } catch (_) {
+      setStatus('Log kopyalanamadı.');
+    }
+  });
+
+  els.logClearBtn?.addEventListener('click', () => {
+    logs.length = 0;
+    if (els.log) els.log.textContent = '';
+    setStatus('Log temizlendi.');
+  });
+
+  async function startMicTest() {
+    if (micTestStream) return;
+    micTestStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: noiseReductionEnabled,
+        noiseSuppression: noiseReductionEnabled,
+        autoGainControl: noiseReductionEnabled
+      }
+    });
+    if (els.micLoopback) {
+      els.micLoopback.srcObject = micTestStream;
+      els.micLoopback.muted = false;
+      if (typeof els.micLoopback.play === 'function') {
+        els.micLoopback.play().catch(() => {});
+      }
+    }
+    const audioCtx = new AudioContext();
+    const source = audioCtx.createMediaStreamSource(micTestStream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    source.connect(analyser);
+    const buffer = new Uint8Array(analyser.fftSize);
+    micTestMeterTimer = window.setInterval(() => {
+      analyser.getByteTimeDomainData(buffer);
+      let peak = 0;
+      for (let i = 0; i < buffer.length; i += 1) {
+        const v = Math.abs(buffer[i] - 128) / 128;
+        if (v > peak) peak = v;
+      }
+      const pct = Math.max(0, Math.min(100, Math.round(peak * 180)));
+      if (els.micTestVuFill) els.micTestVuFill.style.width = `${pct}%`;
+      if (els.micTestDb) {
+        const db = peak > 0 ? (20 * Math.log10(peak)).toFixed(1) : '-60.0';
+        els.micTestDb.textContent = `${db} dB`;
+      }
+    }, 120);
   }
-  els.nicknameInput.value = currentNickname;
-}
 
-if (els.nicknameInput) {
-  els.nicknameInput.addEventListener('change', () => {
-    updateNickname(els.nicknameInput.value);
-  });
-}
+  function stopMicTest() {
+    if (micTestMeterTimer) {
+      window.clearInterval(micTestMeterTimer);
+      micTestMeterTimer = null;
+    }
+    if (micTestStream) {
+      micTestStream.getTracks().forEach((track) => track.stop());
+      micTestStream = null;
+    }
+    if (els.micLoopback) {
+      els.micLoopback.srcObject = null;
+    }
+    if (els.micTestVuFill) els.micTestVuFill.style.width = '0%';
+    if (els.micTestDb) els.micTestDb.textContent = '- dB';
+  }
 
-if (els.serverUrlInput) {
-  els.serverUrlInput.addEventListener('input', () => {
-    updateServerUrlDisplay();
-  });
-}
-
-if (els.modeSelect) {
-  els.modeSelect.addEventListener('change', () => {
-    if (els.modeSelect.value === 'sfu') {
-      showToast('SFU desteği yakında. Şimdilik mesh kullanılıyor.', 'warn');
-      els.modeSelect.value = 'mesh';
+  els.micTestBtn?.addEventListener('click', async () => {
+    if (els.micTestModal) els.micTestModal.classList.remove('hidden');
+    try {
+      await startMicTest();
+    } catch (err) {
+      setStatus(`Mikrofon testi başlatılamadı: ${err && err.message ? err.message : err}`);
     }
   });
+  els.micTestClose?.addEventListener('click', () => {
+    stopMicTest();
+    if (els.micTestModal) els.micTestModal.classList.add('hidden');
+  });
+  els.micTestStart?.addEventListener('click', () => {
+    void startMicTest();
+  });
+  els.micTestStop?.addEventListener('click', () => {
+    stopMicTest();
+  });
+
+  els.echoTestBtn?.addEventListener('click', () => {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 660;
+      gain.gain.value = 0.05;
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      window.setTimeout(() => {
+        osc.stop();
+        ctx.close().catch(() => {});
+      }, 200);
+      if (els.echoResult) els.echoResult.textContent = 'Test sesi çalındı';
+    } catch (_) {
+      if (els.echoResult) els.echoResult.textContent = 'Test başarısız';
+    }
+  });
+
+  function sendModerationAction(action) {
+    const targetId = getSelectedModerationTarget();
+    if (!targetId) {
+      setStatus('Önce moderasyon hedefi seç.');
+      return;
+    }
+    sendCommand('moderation', { action, targetId });
+    appendChatMessage({ system: true, text: `Moderasyon komutu gönderildi: ${action}`, ts: Date.now() });
+  }
+
+  els.muteOtherBtn?.addEventListener('click', () => sendModerationAction('mute'));
+  els.unmuteOtherBtn?.addEventListener('click', () => sendModerationAction('unmute'));
+  els.kickBtn?.addEventListener('click', () => sendModerationAction('kick'));
+  els.banBtn?.addEventListener('click', () => sendModerationAction('ban'));
+
+  els.slowModeBtn?.addEventListener('click', () => {
+    const ms = Number(els.slowModeSelect && els.slowModeSelect.value ? els.slowModeSelect.value : 0);
+    chatSlowModeMs = Number.isFinite(ms) ? Math.max(0, Math.floor(ms)) : 0;
+    sendCommand('slowmode', { ms: chatSlowModeMs });
+    appendChatMessage({ system: true, text: `Slow mode ayarlandı: ${chatSlowModeMs}ms`, ts: Date.now() });
+  });
+
+  els.softRefreshBtn?.addEventListener('click', async () => {
+    try {
+      if (room) await createAndPublishMicTrack();
+      sendCommand('refresh_soft', {});
+      setStatus('Soft refresh uygulandı.');
+    } catch (err) {
+      setStatus(`Soft refresh hatası: ${err && err.message ? err.message : err}`);
+    }
+  });
+
+  els.hardRefreshBtn?.addEventListener('click', async () => {
+    const targetRoom = currentRoomId;
+    const targetNick = currentNickname;
+    sendCommand('refresh_hard', {});
+    if (!targetRoom || !targetNick) return;
+    await leaveRoom();
+    await joinRoom(targetRoom, targetNick);
+  });
+
+  const onWindowLeave = () => {
+    const roomName = currentRoomId;
+    if (!roomName) return;
+    void announceRoomClosed(roomName, { useBeacon: true, keepalive: true });
+  };
+  window.addEventListener('beforeunload', onWindowLeave);
+  window.addEventListener('pagehide', onWindowLeave);
 }
 
-ensureSocket();
-setInterval(() => {
+async function init() {
+  setupTabs();
+  setupSettingsDrawer();
+  bindWindowControls();
+  applyUserPrefs();
+  wireUi();
+  setView(false);
+  updateButtons();
+  updateMuteButton();
+  if (els.vuFill) els.vuFill.style.width = '0%';
+  if (els.micDb) els.micDb.textContent = '- dB';
+  updateSpeakerButton();
   updateStatusBar();
-}, 1000);
+  renderAudioControls();
+  setStatus('Hazır. Odaya katılabilirsin.');
+  updateScreenStatusText(t.screenShareEmpty);
+  startRoomListLoop();
+  await populateDevices();
+}
+
+void init();

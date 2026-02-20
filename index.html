@@ -59,13 +59,13 @@
       <section id="roomView" class="view">
         <header class="header roomHeader">
           <div class="headerTitle">
-            <h1>Oda</h1>
+            <h1>EmreCord</h1>
             <p class="subtitle" data-i18n="subtitle">Sohbete hoş geldin</p>
           </div>
           <div class="statusBar">
             <div class="statusPill" id="statusConn">Bağlı: -</div>
-            <div class="statusPill" id="statusPing">Ping: -</div>
-            <div class="statusPill" id="statusMic">Mikrofon: -</div>
+            <div class="statusPill" id="statusPing" style="display: none;">Ping: -</div>
+            <div class="statusPill" id="statusMic">Mikrofon(NR = Gürültü Azaltma): -</div>
             <div class="statusPill" id="statusScreen">Ekran: -</div>
           </div>
           <button id="settingsBtn" class="btn iconBtn" title="Ayarlar">⚙️</button>
@@ -82,7 +82,7 @@
 
           <section class="card centerColumn">
             <div class="centerControls">
-              <div class="primaryActions">
+              <div class="primaryActions" style="margin-bottom: 15px;">
                 <button id="muteBtn" class="btn primary micBtn" disabled data-i18n="muteBtn">Mikrofon</button>
                 <div class="row">
                   <button id="speakerBtn" class="btn" data-i18n="speakerOn">Sesi Kapat</button>
@@ -127,6 +127,7 @@
             <div class="tabContent">
               <section class="tabPane chatPane active" data-tab="chat">
                 <div id="chatMessages" class="chatMessages"></div>
+                <!-- <small class="mutedText">Komutlar: /yayın, /yayın kapa, /yayın aç, /nick yeniad, /mute</small> -->
                 <div class="chatInputRow">
                   <input
                     id="chatInput"
@@ -191,6 +192,10 @@
                         <option value="10000">10 sn</option>
                       </select>
                       <button id="slowModeBtn" class="btn">Uygula</button>
+                    </div>
+                    <div class="row buttons">
+                      <button id="softRefreshBtn" class="btn">Bağlantıları Yenile</button>
+                      <button id="hardRefreshBtn" class="btn danger">Acil Reset (Bağlantıyı Sıfırla)</button>
                     </div>
                   </div>
                 </div>
@@ -295,6 +300,14 @@
                     <option value="sfu">SFU (yakında)</option>
                   </select>
                 </div>
+                <div class="row">
+                  <label for="screenQuality" class="label">Ekran Paylaşım Kalitesi</label>
+                  <select id="screenQuality" class="input">
+                    <option value="low">Low (720p 15fps)</option>
+                    <option value="medium">Medium (720p 20fps)</option>
+                    <option value="high">High (900p 24fps)</option>
+                  </select>
+                </div>
                 <div class="row toggles">
                   <label class="switch">
                     <input id="listenOnlyToggle" type="checkbox" />
@@ -313,7 +326,7 @@
         </div>
       </div>
     </main>
-    <small id="version">Sürüm 1.5.1</small>
+    <small id="version">Sürüm 2.1.0 (Yeni Bağlantı Türü Test)</small>
     <div id="toastContainer" class="toastContainer"></div>
 
     <div id="micTestModal" class="modal hidden">
@@ -345,14 +358,19 @@
           <button id="screenModalClose" class="btn small">Kapat</button>
         </div>
         <div class="screenModalBody">
-          <video id="screenModalVideo" autoplay playsinline muted controls></video>
+          <video id="screenModalVideo" autoplay playsinline muted></video>
           <div id="screenModalStatus" class="screenModalStatus">Ekran paylaşımı yok.</div>
         </div>
       </div>
     </div>
-    <!-- Socket.io client (CDN) -->
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="./app.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "livekit-client": "./livekit-client-resolver.js"
+        }
+      }
+    </script>
+    <script type="module" src="./app.js"></script>
   </body>
 </html>
 

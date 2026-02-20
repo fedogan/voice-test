@@ -2,3 +2,11 @@ node_modules/
 server/node_modules/
 .env
 .DS_Store
+desktop/dist/
+desktop/build/
+desktop/.env
+desktop/.DS_Store
+desktop/icon.png
+desktop/package.json
+desktop/package-lock.json
+desktop/package-lock.json

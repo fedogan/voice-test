@@ -34,12 +34,12 @@ body {
     sans-serif;
   background:
     radial-gradient(900px 700px at 10% 10%, rgba(0, 9, 44, 0.368), transparent 55%),
-    radial-gradient(900px 700px at 90% 0%, rgba(251, 255, 0, 0.18), transparent 60%),
+    radial-gradient(900px 700px at 90% 0%, rgba(255, 52, 52, 0.452), transparent 60%),
     linear-gradient(180deg, #000000, var(--bg-deep));
   color: var(--text);
   min-height: 100vh;
   min-width: 1200px;
-  overflow: hidden;
+  overflow: auto;
   padding-top: 0;
 }
 .app {
@@ -254,7 +254,7 @@ body.window-fullscreen .app {
 .centerColumn {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .centerControls {
@@ -319,7 +319,7 @@ body.window-fullscreen .app {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow: hidden;
+  overflow: auto;
   height: 100%;
   width: 100%;
   min-width: 360px;
@@ -379,7 +379,7 @@ body.window-fullscreen .app {
   justify-content: center;
   white-space: nowrap;
   text-overflow: ellipsis;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
 }
 
@@ -406,7 +406,7 @@ body.window-fullscreen .app {
   flex: 1;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
+  overflow: auto;
   display: flex;
 }
 
@@ -419,6 +419,7 @@ body.window-fullscreen .app {
   padding: 16px;
   width: 100%;
   animation: fadeIn 0.14s ease;
+  overflow: auto;
 }
 
 .tabContent .tabPane.active {
@@ -433,7 +434,7 @@ body.window-fullscreen .app {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .mainScroll {
@@ -773,6 +774,7 @@ select.input {
   flex-direction: column;
   padding: 16px;
   backdrop-filter: blur(12px);
+  overflow: auto;
 }
 
 .drawer.hidden {
@@ -860,7 +862,7 @@ select.input {
 .accordion {
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: var(--radius-sm);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .accordionHeader {
@@ -1053,7 +1055,7 @@ input[type="range"]::-moz-range-thumb {
   height: 10px;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.2);
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
@@ -1143,7 +1145,7 @@ input[type="range"]::-moz-range-thumb {
   flex: 1;
   min-height: 0;
   border-radius: var(--radius-sm);
-  overflow: hidden;
+  overflow: auto;
   background: #000;
   border: 1px solid rgba(148, 163, 184, 0.2);
   position: relative;
@@ -1187,7 +1189,7 @@ input[type="range"]::-moz-range-thumb {
   border-radius: var(--radius-sm);
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: #000;
-  overflow: hidden;
+  overflow: auto;
   display: flex;
 }
 
@@ -1249,6 +1251,14 @@ input[type="range"]::-moz-range-thumb {
 .users li {
   margin: 6px 0;
   color: var(--muted);
+}
+
+.speakingNameGlow {
+  color: #3d9e60!important;
+  text-shadow:
+    0 0 6px rgba(56, 217, 169, 0.9),
+    0 0 14px rgba(56, 217, 169, 0.7)!important;
+  font-weight: 600;
 }
 
 .footer {
