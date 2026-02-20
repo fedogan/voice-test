@@ -2,7 +2,7 @@ import {
   Room,
   RoomEvent,
   createLocalScreenTracks
-} from 'livekit-client';
+} from "https://cdn.jsdelivr.net/npm/livekit-client@2.17.2/dist/livekit-client.esm.mjs";
 
 const t = {
   participantsEmpty: 'Henüz kimse yok.',
