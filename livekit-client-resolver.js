@@ -3,7 +3,15 @@ let livekitModule = null;
 try {
   livekitModule = await import('./desktop/node_modules/livekit-client/dist/livekit-client.esm.mjs');
 } catch (_devErr) {
-  livekitModule = await import('../node_modules/livekit-client/dist/livekit-client.esm.mjs');
+  try {
+    livekitModule = await import('./node_modules/livekit-client/dist/livekit-client.esm.mjs');
+  } catch (_rootErr) {
+    try {
+      livekitModule = await import('../node_modules/livekit-client/dist/livekit-client.esm.mjs');
+    } catch (_desktopErr) {
+      livekitModule = await import('https://cdn.jsdelivr.net/npm/livekit-client@latest/dist/livekit-client.esm.mjs');
+    }
+  }
 }
 
 export const { Room, RoomEvent, createLocalAudioTrack, createLocalScreenTracks } = livekitModule;
