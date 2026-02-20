@@ -9,8 +9,7 @@ try {
     try {
       livekitModule = await import('../node_modules/livekit-client/dist/livekit-client.esm.mjs');
     } catch (_desktopErr) {
-      livekitModule = await import('https://cdn.jsdelivr.net/npm/livekit-client@latest/dist/livekit-client.esm.mjs');
-    }
+livekitModule = await import('https://cdn.jsdelivr.net/npm/livekit-client@2.17.2/dist/livekit-client.esm.mjs');    }
   }
 }
 
